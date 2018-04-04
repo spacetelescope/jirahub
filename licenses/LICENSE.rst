@@ -1,4 +1,4 @@
-Copyright (c) year, Steve Crawford
+Copyright (c) 2018, Steve Crawford
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
