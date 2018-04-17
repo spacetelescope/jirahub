@@ -105,8 +105,8 @@ def how_issues_differ(github, jira, github_id, jira_id):
     differences['comments'] = {'github': missing_github_comments, 'jira': missing_jira_comments}
 
     if differences:
-       logging.info('The following differences were found:')
-       for k in differences:
+        logging.info('The following differences were found:')
+        for k in differences:
             logging.info('  Difference in {}: {}'.format(k, differences[k]))
 
     return differences
