@@ -81,6 +81,6 @@ The following are the requirements for the development of jirahub:
 
 
 Reference/API
-=============
+-------------
 
 .. automodapi:: jirahub

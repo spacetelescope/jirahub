@@ -7,6 +7,8 @@ A package for syncing JIRA tickets and Github issues
 
 This package provides classes and a template to set up a customized script for syncing tickets in a JIRA project and issues in a Github repository.
 
+Please see the documentation for more information
+
 
 License
 -------

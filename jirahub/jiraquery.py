@@ -38,7 +38,7 @@ class JiraQuery(object):
         elif user is not None:
             self.jira = JIRA(site, basic_auth=(user, password))
         else:
-             self.jira = JIRA(site)
+            self.jira = JIRA(site)
 
     @property
     def issue(self):
@@ -52,7 +52,7 @@ class JiraQuery(object):
             self._issue = None
 
     def add_comment(self, comment):
-        """Add a comment to an issue.  
+        """Add a comment to an issue.
 
         Parameters
         ----------

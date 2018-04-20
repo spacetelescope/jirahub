@@ -5,34 +5,32 @@ import logging
 
 __all__ = ['how_issues_differ']
 
-# Need a list of issues to watch and are linked together -- if not, all opened issues should be tracked
-
-# check to see if they changd at all
-
-# If an issue is opened in github, it creates a Jira ticket
-# If an issue is opened in jira, it creates a github ticket
-# When a comment is added in github, it should be added in jira
-# when a comment is added in jira, it should be added in github
-# when an issue is closed in github, it should be closed in jira
-# when an issue is close in jira, it shoul be close in github
-# milestones for jira and github should be kept in sync
-# if a label is created in github, it should be added in jira
-# if a label is created in jira, it should be added in github if the label exists
-# there should be a link between the two issues
-# There needs to be away to ignore comments opened by certain users
-# Issues that are watched should be kept in synced -- comments, milestones, labels, and status
-
-# Bonus:  Config file to link jira and github users
+# Need a list of issues to watch and are linked together -- if not, all opened \
+# issues should be tracked \
+# check to see if they changd at all \
+# If an issue is opened in github, it creates a Jira ticket \
+# If an issue is opened in jira, it creates a github ticket \
+# When a comment is added in github, it should be added in jira \
+# when a comment is added in jira, it should be added in github \
+# when an issue is closed in github, it should be closed in jira \
+# when an issue is close in jira, it shoul be close in github \
+# milestones for jira and github should be kept in sync \
+# if a label is created in github, it should be added in jira \
+# if a label is created in jira, it should be added in github if the label exists \
+# there should be a link between the two issues \
+# There needs to be away to ignore comments opened by certain users \
+# Issues that are watched should be kept in synced -- comments, milestones, labels, and status \
+# Bonus:  Config file to link jira and github users \
 
 
 def how_issues_differ(github, jira, github_id, jira_id):
-    """Compare a jira and github issue for the following things:
-         * do they both exist?
-         * are they the same status?
-         * do they have the same comments?
-         * do they have the same labels?
-         * are they set for the same milestone?
-    If they are different, return the differences
+    """Compare a jira and github issue for the following things
+         1 do they both exist? \
+         2 are they the same status? \
+         3 do they have the same comments? \
+         4 do they have the same labels? \
+         5 are they set for the same milestone? \
+    If they are different, return the differences.
 
     Parameters
     ----------
@@ -54,8 +52,8 @@ def how_issues_differ(github, jira, github_id, jira_id):
         A dictionary containing the differences in status, comments, labels,
         or milestones.
 
-    Note
-    ----
+    Notes
+    -----
     The keywords in the returned dictionary are:
         * missing: if one of the issues does not exist
         * status:  the status of each repository if different as a tuble
@@ -107,8 +105,8 @@ def how_issues_differ(github, jira, github_id, jira_id):
     differences['comments'] = {'github': missing_github_comments, 'jira': missing_jira_comments}
 
     if differences:
-       logging.info('The following differences were found:')
-       for k in differences:
+        logging.info('The following differences were found:')
+        for k in differences:
             logging.info('  Difference in {}: {}'.format(k, differences[k]))
 
     return differences
