@@ -13,4 +13,4 @@ Please see the documentation for more information
 License
 -------
 
-This project is Copyright (c) Steve Crawford and licensed under the terms of the BSD 3-Clause license. See the licenses folder for more information.
+This project is Copyright (c) Association of Universities for Research in Astronomy (AURA) and licensed under the terms of the BSD 3-Clause license. See the licenses folder for more information.
