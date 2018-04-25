@@ -84,7 +84,7 @@ def how_issues_differ(github, jira, github_id, jira_id):
         github.issue.number))
 
     # compare the status of each issue
-    if jira.issue.fields.status != github.issue.state:
+    if jira.issue.fields.status.name.lower() != github.issue.state.lower():
         differences['status'] = (github.issue.state, jira.issue.fields.status.name)
 
     # compare the milestone of each issue -- assuming fixVersions for jira milestones
@@ -110,3 +110,5 @@ def how_issues_differ(github, jira, github_id, jira_id):
             logging.info('  Difference in {}: {}'.format(k, differences[k]))
 
     return differences
+
+
