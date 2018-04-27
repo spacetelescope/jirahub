@@ -3,9 +3,9 @@
 
 import logging
 
-__all__ = ['how_issues_differ']
+__all__ = ['how_issues_differ', 'IssueSync']
 
-# Need a list of issues to watch and are linked together -- if not, all opened \
+# Need a list of issues to watch3 and are linked together -- if not, all opened \
 # issues should be tracked \
 # check to see if they changd at all \
 # If an issue is opened in github, it creates a Jira ticket \
@@ -111,4 +111,66 @@ def how_issues_differ(github, jira, github_id, jira_id):
 
     return differences
 
+
+class IssueSync(object):
+    """Sync tickets between a Github repository and  a JIRA project.  This is
+    set up for a specific set of rules for the JWST pipeline
+
+    This class can be used to build up the custom commands for how the two
+    projects and repositories should be synced.
+
+    Parameters
+    ----------
+    github: ~GithubQuery
+        Object capable of querying a github repo
+
+    jira: ~JiraQuery
+        Object capable of querying a Jira project
+
+    github_id: str
+        Number for a github issue
+
+    jira_id: str
+        A jira ticket
+
+
+    """
+
+    def __init__(self, github, jira, github_id, jira_id):
+        self.github = github
+        self.jira = jira
+        self.github_id = github_id
+        self.jira_id = jira_id
+
+        self.differences = how_issues_differ(self.github, self.jira, self.github_id, self.jira_id)
+
+
+    def new(self):
+        """Change the tickets based on the status of the tickets
+        """
+        return
+
+
+    def status(self):
+        """Change the tickets based on the status of the tickets
+        """
+        return
+
+
+    def comments(self):
+        """Change the tickets based on the status of the tickets
+        """
+        return
+
+
+    def labels(self):
+        """Change the tickets based on the status of the tickets
+        """
+        return
+
+
+    def milestones(self):
+        """Change the tickets based on the status of the tickets
+        """
+        return
 
