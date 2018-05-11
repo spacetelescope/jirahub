@@ -60,3 +60,13 @@ class JiraQuery(object):
             Comment to be added to an issue
         """
         self.jira.add_comment(self.issue, comment)
+
+    def change_status(self, status):
+        """Change the status of an issue
+
+        Parameters
+        ----------
+        status: str
+            Status to change the comment to
+        """
+        self.jira.transition_issue(self.issue, status)
