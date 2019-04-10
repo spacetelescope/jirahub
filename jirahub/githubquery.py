@@ -34,7 +34,7 @@ class GithubQuery(object):
         if key:
             self.github = Github(key)
         elif user is not None:
-            self.github = Githubh(user, password)
+            self.github = Github(user, password)
         else:
             self.github = Github()
 
@@ -77,4 +77,3 @@ class GithubQuery(object):
             Status to change the comment to
         """
         self.issue.edit(state=status)
-
