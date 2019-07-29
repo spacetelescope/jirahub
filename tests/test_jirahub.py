@@ -606,6 +606,26 @@ class TestIssueSync:
         assert_client_activity(jira_client, issue_creates=1, comment_creates=1)
         assert_client_activity(github_client, issue_creates=1, comment_creates=1)
 
+    def test_perform_sync_missing_issue(self, issue_sync, config, github_client, jira_client, create_issue):
+        # Confirm that a deleted source issue doesn't impact unrelated issues
+
+        set_features(config, Source.GITHUB, {SyncFeature.CREATE_ISSUES})
+
+        jira_issue = create_issue(Source.JIRA)
+        deleted_jira_issue = create_issue(Source.JIRA)
+        jira_client.issues = [jira_issue, deleted_jira_issue]
+        issue_sync.perform_sync()
+        assert_client_activity(jira_client, comment_creates=2)
+        assert_client_activity(github_client, issue_creates=2)
+
+        jira_client.reset_stats()
+        github_client.reset_stats()
+        jira_client.issues = [i for i in jira_client.issues if i.issue_id != deleted_jira_issue.issue_id]
+        jira_client.issues[0].__dict__["title"] = "Updated title"
+        issue_sync.perform_sync()
+        assert_client_activity(jira_client)
+        assert_client_activity(github_client, issue_updates=1)
+
     def test_exception_raised_by_comment(
         self, issue_sync, config, github_client, jira_client, create_issue, create_comment
     ):
