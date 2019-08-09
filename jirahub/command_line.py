@@ -109,7 +109,7 @@ def _handle_sync(args):
         return 1
 
     logger.info("Sync successful.  Next placeholder: %s", _format_placeholder(new_min_updated_at))
-    if args.placeholder_path:
+    if args.placeholder_path and not args.dry_run:
         _write_placeholder(args.placeholder_path, new_min_updated_at)
 
     return 0
@@ -154,7 +154,7 @@ def _read_placeholder(path):
         with open(path, "r") as file:
             value = file.read()
         min_updated_at = datetime.fromisoformat(value.strip())
-        min_updated_at.replace(tzinfo=timezone.utc)
+        return min_updated_at.replace(tzinfo=timezone.utc)
     else:
         logger.warning("Placeholder file missing")
         return None

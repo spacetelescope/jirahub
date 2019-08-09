@@ -289,4 +289,4 @@ Users will likely want to run ``jirahub sync`` in a cron job, so that it can reg
 for changes.  We recommend use of the `lockrun <http://www.unixwiz.net/tools/lockrun.html>`_ tool to
 avoid overlap between jirahub processes.  Your cron line might look something like this::
 
-    */5 * * * * lockrun --lockfile=/path/to/jirahub.lockrun -- jirahub sync /path/to/my-jirahub-config.ini --placeholder-path /path/to/jirahub-placeholder.txt >> /path/to/jirahub.log
+    */5 * * * * lockrun --lockfile=/path/to/jirahub.lockrun -- jirahub sync /path/to/my-jirahub-config.ini --placeholder-path /path/to/jirahub-placeholder.txt >> /path/to/jirahub.log 2>&1
