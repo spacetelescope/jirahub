@@ -145,7 +145,7 @@ unaffected by the sync.  None are required.
    * - Name
      - Description
    * - issue_type
-     - Issue type set on new JIRA issues.  Leave un-set to use your project's default.
+     - Issue type set on new JIRA issues
    * - priority
      - Priority set on new JIRA issues.  Leave un-set to use your project's default.
    * - components

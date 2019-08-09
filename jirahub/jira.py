@@ -293,10 +293,7 @@ class _IssueTranslator:
                 raw_fields["priority"] = None
 
         if "issue_type" in fields:
-            if fields["issue_type"]:
-                raw_fields["issuetype"] = {"name": fields["issue_type"]}
-            else:
-                raw_fields["issuetype"] = None
+            raw_fields["issuetype"] = {"name": fields["issue_type"]}
 
         if "is_open" in fields or issue is None:
             if "is_open" in fields:

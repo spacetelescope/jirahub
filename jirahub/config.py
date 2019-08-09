@@ -101,7 +101,7 @@ class SyncConfig:
 
 @dataclass
 class DefaultsConfig:
-    issue_type: str = None
+    issue_type: str = "Story"
     priority: str = None
     components: Set[str] = field(default_factory=set)
 
