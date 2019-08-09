@@ -36,7 +36,7 @@ def test_load_config_minimal():
     assert config.jira.filter.exclude_labels == set()
     assert config.jira.filter.open_only is True
 
-    assert config.jira.defaults.issue_type is None
+    assert config.jira.defaults.issue_type == "Story"
     assert config.jira.defaults.priority is None
     assert config.jira.defaults.components == set()
 

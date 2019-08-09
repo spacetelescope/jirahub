@@ -306,7 +306,9 @@ class Client:
 
         # Already paginated by GitHub's client:
         for raw_issue in raw_issues:
-            yield self._translator.get_issue(raw_issue, raw_issue.get_comments())
+            # The GitHub API treats pull requests as issues (but not the other way around):
+            if not raw_issue.pull_request:
+                yield self._translator.get_issue(raw_issue, raw_issue.get_comments())
 
     def get_issue(self, issue_id):
         raw_issue = self._repo.get_issue(issue_id)
@@ -366,11 +368,15 @@ class Client:
 
     def is_issue(self, issue_id):
         try:
-            self._repo.get_issue(issue_id)
+            issue = self._repo.get_issue(issue_id)
         except UnknownObjectException:
             return False
         else:
-            return True
+            # The GitHub API treats pull requests as issues (but not the other way around):
+            if issue.pull_request:
+                return False
+            else:
+                return True
 
     def is_pull_request(self, pr_id):
         try:

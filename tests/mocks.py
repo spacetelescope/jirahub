@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass, field
-from typing import List, Any
+from typing import List, Any, Dict
 from jira.exceptions import JIRAError
 import requests
 import re
@@ -417,6 +417,7 @@ class MockGithubIssue:
     labels: List[MockGithubLabel] = field(default_factory=list)
     milestone: MockGithubMilestone = None
     comments: List[MockGithubComment] = field(default_factory=list)
+    pull_request: Dict[str, Any] = None
 
     def edit(self, body=NotSet, title=NotSet, state=NotSet, labels=NotSet, milestone=NotSet):
         if body != NotSet:
