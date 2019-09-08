@@ -1,11 +1,10 @@
-from enum import Enum, auto
+from enum import Enum
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Dict, Any, Set
-import hashlib
+from typing import List, Any, Set
 
 
-__all__ = ["Source", "MetadataField", "User", "Comment", "Issue"]
+__all__ = ["Source", "User", "Comment", "Issue", "Metadata", "CommentMetadata"]
 
 
 class Source(Enum):
@@ -23,16 +22,17 @@ class Source(Enum):
             return Source.JIRA
 
 
-class MetadataField(Enum):
-    MIRROR_ID = auto()
-    MIRROR_PROJECT = auto()
-    BODY_HASH = auto()
-    TITLE_HASH = auto()
-    IS_TRACKING_COMMENT = auto()
+@dataclass(frozen=True)
+class CommentMetadata:
+    jira_comment_id: int
+    github_comment_id: int
 
-    @property
-    def key(self):
-        return self.name.lower()
+
+@dataclass(frozen=True)
+class Metadata:
+    github_repository: str = None
+    github_issue_id: int = None
+    comments: List[CommentMetadata] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -55,27 +55,10 @@ class Comment:
     user: User
     is_bot: bool
     body: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    issue_metadata: Dict[str, Any] = field(default_factory=dict)
     raw_comment: Any = None
 
     def __str__(self):
         return f"{self.source} comment {self.comment_id}"
-
-    @property
-    def mirror_id(self):
-        return self.metadata.get(MetadataField.MIRROR_ID.key)
-
-    @property
-    def is_tracking_comment(self):
-        return bool(self.metadata.get(MetadataField.IS_TRACKING_COMMENT.key))
-
-    @property
-    def body_hash(self):
-        if self.is_bot:
-            return self.metadata[MetadataField.BODY_HASH.key]
-        else:
-            return _hash_string(self.body)
 
 
 @dataclass(frozen=True)
@@ -96,53 +79,8 @@ class Issue:
     milestones: Set[str] = field(default_factory=set)
     components: Set[str] = field(default_factory=set)
     comments: List[Comment] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: Metadata = field(default_factory=Metadata)
     raw_issue: Any = None
-    github_repository: str = None
-    github_issue_id: int = None
 
     def __str__(self):
         return f"{self.source} issue {self.issue_id}"
-
-    @property
-    def mirror_id(self):
-        return self._get_metadata(MetadataField.MIRROR_ID)
-
-    @property
-    def mirror_project(self):
-        return self._get_metadata(MetadataField.MIRROR_PROJECT)
-
-    @property
-    def body_hash(self):
-        if self.is_bot:
-            return self.metadata[MetadataField.BODY_HASH.key]
-        else:
-            return _hash_string(self.body)
-
-    @property
-    def title_hash(self):
-        if self.is_bot:
-            return self.metadata[MetadataField.TITLE_HASH.key]
-        else:
-            return _hash_string(self.title)
-
-    def _get_metadata(self, metadata_field):
-        if metadata_field.key in self.metadata:
-            return self.metadata[metadata_field.key]
-
-        comment = self.tracking_comment
-        if comment:
-            return comment.issue_metadata.get(metadata_field.key)
-
-        return None
-
-    @property
-    def tracking_comment(self):
-        return next((c for c in self.comments if c.is_tracking_comment), None)
-
-
-def _hash_string(value):
-    if value is None:
-        value = ""
-
-    return hashlib.md5(value.encode("utf-8")).hexdigest()

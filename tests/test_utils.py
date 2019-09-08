@@ -1,9 +1,26 @@
 import pytest
 
-from jirahub.utils import UrlHelper
+from jirahub.utils import UrlHelper, make_github_issue_url, extract_github_ids_from_url
 from jirahub.entities import Source
 
 from . import constants
+
+
+def test_make_github_issue_url():
+    assert make_github_issue_url("spacetelescope/jwst", 143) == "https://github.com/spacetelescope/jwst/issues/143"
+
+
+def test_extract_github_ids_from_url():
+    url = "https://github.com/spacetelescope/jwst/issues/143"
+    github_repository, github_issue_id = extract_github_ids_from_url(url)
+
+    assert github_repository == "spacetelescope/jwst"
+    assert github_issue_id == 143
+
+
+def test_extract_github_ids_from_url_bad_url():
+    url = "https://www.zombo.com/spacetelescope/jwst/issues/143"
+    assert extract_github_ids_from_url(url) == (None, None)
 
 
 class TestUrlHelper:

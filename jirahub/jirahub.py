@@ -1,6 +1,7 @@
 import logging
+import dataclasses
 
-from .entities import Source, MetadataField
+from .entities import Source, Metadata, CommentMetadata
 from .config import SyncFeature
 from .utils import UrlHelper
 
@@ -13,43 +14,7 @@ __all__ = ["IssueSync"]
 logger = logging.getLogger(__name__)
 
 
-class _IssueFilter:
-    def __init__(self, filter_config):
-        self._filter_config = filter_config
-
-    def accept(self, issue):
-        if self._filter_config.open_only and not issue.is_open:
-            return False
-
-        if self._filter_config.min_created_at:
-            if issue.created_at < self._filter_config.min_created_at:
-                return False
-
-        if self._filter_config.include_issue_types:
-            if issue.issue_type not in self._filter_config.include_issue_types:
-                return False
-
-        if self._filter_config.exclude_issue_types:
-            if issue.issue_type in self._filter_config.exclude_issue_types:
-                return False
-
-        if self._filter_config.include_components:
-            if not self._filter_config.include_components.intersection(issue.components):
-                return False
-
-        if self._filter_config.exclude_components:
-            if self._filter_config.exclude_components.intersection(issue.components):
-                return False
-
-        if self._filter_config.include_labels:
-            if not self._filter_config.include_labels.intersection(issue.labels):
-                return False
-
-        if self._filter_config.exclude_labels:
-            if self._filter_config.exclude_labels.intersection(issue.labels):
-                return False
-
-        return True
+_DEFAULT_ISSUE_TYPE = "Story"
 
 
 class IssueSync:
@@ -71,10 +36,6 @@ class IssueSync:
             Source.JIRA: jira.Formatter(config, self.url_helper, self.get_client(Source.GITHUB)),
             Source.GITHUB: github.Formatter(config, self.url_helper, self.get_client(Source.JIRA)),
         }
-        self._issue_filter_by_source = {
-            Source.JIRA: _IssueFilter(config.jira.filter),
-            Source.GITHUB: _IssueFilter(config.github.filter),
-        }
 
         self.dry_run = dry_run
 
@@ -94,7 +55,11 @@ class IssueSync:
             return self._config.github.repository
 
     def accept_issue(self, source, issue):
-        return self._issue_filter_by_source[source].accept(issue)
+        issue_filter = self._config.get_source_config(source).issue_filter
+        if issue_filter:
+            return issue_filter(issue)
+        else:
+            return False
 
     def sync_feature_enabled(self, source, sync_feature):
         return self._config.is_enabled(source, sync_feature)
@@ -125,78 +90,66 @@ class IssueSync:
     def _perform_sync_issue(self, updated_issue):
         other_source = updated_issue.source.other
 
-        if updated_issue.mirror_id or updated_issue.github_issue_id:
-            if updated_issue.mirror_id:
-                if updated_issue.mirror_project != self.get_project(other_source):
-                    logger.info("%s was updated, but is mirrored in a different project/repository", updated_issue)
-                    return None
+        if (
+            updated_issue.source == Source.JIRA
+            and updated_issue.metadata.github_repository
+            and updated_issue.metadata.github_repository != self._config.github.repository
+        ):
+            logger.info(
+                "%s was updated, but linked repository (%s) does not match configured repository (%s)",
+                updated_issue,
+                updated_issue.metadata.github_repository,
+                self._config.github.repository,
+            )
+            return None
 
-                other_issue = self.get_client(other_source).get_issue(updated_issue.mirror_id)
-            else:
-                assert updated_issue.source == Source.JIRA
-
-                if (
-                    self._config.jira.github_repository_field
-                    and updated_issue.github_repository != self._config.github.repository
-                ):
-                    logger.info(
-                        "%s was updated, but repository field (%s) does not match configured repository (%s)",
-                        updated_issue,
-                        updated_issue.github_repository,
-                        self._config.github.repository,
-                    )
-                    return None
-
-                other_issue = self.get_client(other_source).get_issue(updated_issue.github_issue_id)
-
+        other_issue = self.get_client(other_source).find_other_issue(updated_issue)
+        if other_issue:
             updated_issue_updates, other_issue_updates = self.make_issue_updates(updated_issue, other_issue)
 
             if updated_issue_updates:
                 logger.info("Updating %s: %s", updated_issue, updated_issue_updates)
                 if not self.dry_run:
-                    self.get_client(updated_issue.source).update_issue(updated_issue, updated_issue_updates)
+                    updated_issue = self.get_client(updated_issue.source).update_issue(
+                        updated_issue, updated_issue_updates
+                    )
                 else:
                     logger.info("Skipping issue update due to dry run")
 
             if other_issue_updates:
                 logger.info("Updating %s: %s", other_issue, other_issue_updates)
                 if not self.dry_run:
-                    self.get_client(other_issue.source).update_issue(other_issue, other_issue_updates)
+                    other_issue = self.get_client(other_issue.source).update_issue(other_issue, other_issue_updates)
                 else:
                     logger.info("Skipping issue update due to dry run")
-
-            if not updated_issue.is_bot and not updated_issue.tracking_comment:
-                self._create_tracking_comment(updated_issue, other_issue)
-
-            if not other_issue.is_bot and not other_issue.tracking_comment:
-                self._create_tracking_comment(other_issue, updated_issue)
 
             self.sync_comments(updated_issue, other_issue)
 
             return other_issue
-        else:
-            if self.sync_feature_enabled(other_source, SyncFeature.CREATE_ISSUES) and self.accept_issue(
-                other_source, updated_issue
-            ):
-                mirror_issue_fields = self.make_mirror_issue(updated_issue)
+        elif self.accept_issue(other_source, updated_issue):
+            mirror_issue_fields = self.make_mirror_issue(updated_issue)
 
-                logger.info("Creating mirror of %s: %s", updated_issue, mirror_issue_fields)
-                if not self.dry_run:
-                    mirror_issue = self.get_client(other_source).create_issue(mirror_issue_fields)
-                    self._create_tracking_comment(updated_issue, mirror_issue)
+            for hook in self.get_source_config(other_source).before_issue_create:
+                mirror_issue_fields = hook(updated_issue, mirror_issue_fields)
 
-                    updated_issue_updates, _ = self.make_issue_updates(updated_issue, mirror_issue)
-                    if updated_issue_updates:
-                        logger.info("Updating %s: %s", updated_issue, updated_issue_updates)
-                        self.get_client(updated_issue.source).update_issue(updated_issue, updated_issue_updates)
+            logger.info("Creating mirror of %s: %s", updated_issue, mirror_issue_fields)
+            if not self.dry_run:
+                mirror_issue = self.get_client(other_source).create_issue(mirror_issue_fields)
 
-                    self.sync_comments(updated_issue, mirror_issue)
-                    return mirror_issue
-                else:
-                    logger.info("Skipping issue create due to dry run")
-                    return None
+                updated_issue_updates, _ = self.make_issue_updates(updated_issue, mirror_issue)
+                if updated_issue_updates:
+                    logger.info("Updating %s: %s", updated_issue, updated_issue_updates)
+                    updated_issue = self.get_client(updated_issue.source).update_issue(
+                        updated_issue, updated_issue_updates
+                    )
+
+                self.sync_comments(updated_issue, mirror_issue)
+                return mirror_issue
             else:
+                logger.info("Skipping issue create due to dry run")
                 return None
+        else:
+            return None
 
     def make_issue_updates(self, issue_one, issue_two):
         one_updates = {}
@@ -212,23 +165,19 @@ class IssueSync:
                 mirror_issue = issue_two
                 mirror_updates = two_updates
 
-            if mirror_issue.title_hash != source_issue.title_hash:
-                mirror_updates["title"] = self.make_mirror_issue_title(source_issue)
+            expected_mirror_title = self.make_mirror_issue_title(source_issue)
+            if expected_mirror_title != mirror_issue.title:
+                mirror_updates["title"] = expected_mirror_title
 
-                if "metadata" not in mirror_updates:
-                    mirror_updates["metadata"] = mirror_issue.metadata.copy()
+            expected_mirror_body = self.make_mirror_issue_body(source_issue)
+            if expected_mirror_body != mirror_issue.body:
+                mirror_updates["body"] = expected_mirror_body
 
-                mirror_updates["metadata"][MetadataField.TITLE_HASH.key] = source_issue.title_hash
-
-            if mirror_issue.body_hash != source_issue.body_hash:
-                mirror_updates["body"] = self.make_mirror_issue_body(source_issue)
-
-                if "metadata" not in mirror_updates:
-                    mirror_updates["metadata"] = mirror_issue.metadata.copy()
-
-                mirror_updates["metadata"][MetadataField.BODY_HASH.key] = source_issue.body_hash
-
-        fields = [("is_open", SyncFeature.SYNC_STATUS), ("milestones", SyncFeature.SYNC_MILESTONES)]
+        fields = [
+            ("is_open", SyncFeature.SYNC_STATUS),
+            ("milestones", SyncFeature.SYNC_MILESTONES),
+            ("labels", SyncFeature.SYNC_LABELS),
+        ]
 
         for field_name, sync_feature in fields:
             one_field_updates, two_field_updates = self._make_field_updates(
@@ -236,10 +185,6 @@ class IssueSync:
             )
             one_updates.update(one_field_updates)
             two_updates.update(two_field_updates)
-
-        one_labels_updates, two_labels_updates = self._make_labels_updates(issue_one, issue_two)
-        one_updates.update(one_labels_updates)
-        two_updates.update(two_labels_updates)
 
         if issue_one.source == Source.JIRA:
             jira_issue = issue_one
@@ -250,13 +195,16 @@ class IssueSync:
             jira_updates = two_updates
             github_issue = issue_one
 
-        if self._config.jira.github_repository_field:
-            if jira_issue.github_repository != self._config.github.repository:
-                jira_updates["github_repository"] = self._config.github.repository
-
-        if self._config.jira.github_issue_id_field:
-            if jira_issue.github_issue_id != github_issue.issue_id:
-                jira_updates["github_issue_id"] = github_issue.issue_id
+        if (
+            jira_issue.metadata.github_repository != github_issue.project
+            or jira_issue.metadata.github_issue_id != github_issue.issue_id
+        ):
+            metadata = Metadata(
+                github_repository=github_issue.project,
+                github_issue_id=github_issue.issue_id,
+                comments=jira_issue.metadata.comments,
+            )
+            jira_updates["metadata"] = metadata
 
         return one_updates, two_updates
 
@@ -284,57 +232,38 @@ class IssueSync:
 
         return one_updates, two_updates
 
-    def _make_labels_updates(self, issue_one, issue_two):
-        one_enabled = self.sync_feature_enabled(issue_one.source, SyncFeature.SYNC_LABELS)
-        two_enabled = self.sync_feature_enabled(issue_two.source, SyncFeature.SYNC_LABELS)
-
-        one_sync_labels = self.get_source_config(issue_one.source).sync.labels
-        two_sync_labels = self.get_source_config(issue_two.source).sync.labels
-
-        one_labels = issue_one.labels - one_sync_labels
-        two_labels = issue_two.labels - two_sync_labels
-
-        if one_enabled and two_enabled:
-            if issue_one.updated_at > issue_two.updated_at:
-                two_labels = one_labels
-            else:
-                one_labels = two_labels
-        elif one_enabled:
-            one_labels = two_labels
-        elif two_enabled:
-            two_labels = one_labels
-
-        one_labels = one_labels | one_sync_labels
-        two_labels = two_labels | two_sync_labels
-
-        one_updates = {}
-        two_updates = {}
-
-        if issue_one.labels != one_labels:
-            one_updates["labels"] = one_labels
-
-        if issue_two.labels != two_labels:
-            two_updates["labels"] = two_labels
-
-        return one_updates, two_updates
-
     def sync_comments(self, issue_one, issue_two):
         if not self.sync_feature_enabled(issue_one.source, SyncFeature.SYNC_COMMENTS) and not self.sync_feature_enabled(
             issue_two.source, SyncFeature.SYNC_COMMENTS
         ):
             return
 
-        issue_one_comments = [(issue_one, c, issue_two) for c in issue_one.comments if not c.is_tracking_comment]
-        issue_two_comments = [(issue_two, c, issue_one) for c in issue_two.comments if not c.is_tracking_comment]
+        issue_one_comments = [(issue_one, c, issue_two) for c in issue_one.comments]
+        issue_two_comments = [(issue_two, c, issue_one) for c in issue_two.comments]
         all_comments = issue_one_comments + issue_two_comments
+        comments_by_id = {(c.source, c.comment_id): c for _, c, _ in all_comments}
 
-        comments_by_id = {c.comment_id: c for _, c, _ in all_comments}
-        comments_by_mirror_id = {c.mirror_id: c for _, c, _ in all_comments if c.is_bot}
+        if issue_one.source == Source.JIRA:
+            jira_issue = issue_one
+        else:
+            jira_issue = issue_two
+
+        rebuild_comment_metadata = False
+        comments_by_linked_id = {}
+        for comment_metadata in jira_issue.metadata.comments:
+            jira_comment = comments_by_id.get((Source.JIRA, comment_metadata.jira_comment_id))
+            github_comment = comments_by_id.get((Source.GITHUB, comment_metadata.github_comment_id))
+
+            if jira_comment and github_comment:
+                comments_by_linked_id[(Source.JIRA, jira_comment.comment_id)] = github_comment
+                comments_by_linked_id[(Source.GITHUB, github_comment.comment_id)] = jira_comment
+            else:
+                rebuild_comment_metadata = True
 
         for issue, comment, other_issue in all_comments:
             try:
                 if comment.is_bot:
-                    source_comment = comments_by_id.get(comment.mirror_id)
+                    source_comment = comments_by_linked_id.get((comment.source, comment.comment_id))
                     if not source_comment and self.sync_feature_enabled(comment.source, SyncFeature.SYNC_COMMENTS):
                         logger.info("Deleting %s on %s", comment, issue)
 
@@ -342,12 +271,15 @@ class IssueSync:
                             self.get_client(comment.source).delete_comment(comment)
                         else:
                             logger.info("Skipping comment delete due to dry run")
+
+                        rebuild_comment_metadata = True
                 else:
-                    mirror_comment = comments_by_mirror_id.get(comment.comment_id, None)
+                    mirror_comment = comments_by_linked_id.get((comment.source, comment.comment_id))
                     if mirror_comment:
                         if self.sync_feature_enabled(mirror_comment.source, SyncFeature.SYNC_COMMENTS):
-                            if mirror_comment.body_hash != comment.body_hash:
-                                mirror_comment_updates = {"body": self.make_mirror_comment_body(issue, comment)}
+                            expected_mirror_body = self.make_mirror_comment_body(issue, comment)
+                            if mirror_comment.body != expected_mirror_body:
+                                mirror_comment_updates = {"body": expected_mirror_body}
 
                                 logger.info(
                                     "Updating %s on %s: %s", mirror_comment, other_issue, mirror_comment_updates
@@ -367,146 +299,118 @@ class IssueSync:
                             logger.info("Creating comment on %s: %s", other_issue, mirror_comment_fields)
 
                             if not self.dry_run:
-                                self.get_client(other_issue.source).create_comment(other_issue, mirror_comment_fields)
+                                mirror_comment = self.get_client(other_issue.source).create_comment(
+                                    other_issue, mirror_comment_fields
+                                )
+                                comments_by_linked_id[(mirror_comment.source, mirror_comment.comment_id)] = comment
+                                comments_by_linked_id[(comment.source, comment.comment_id)] = mirror_comment
                             else:
                                 logger.info("Skipping comment create due to dry run")
+
+                            rebuild_comment_metadata = True
             except Exception:
                 logger.exception("Failed syncing %s", comment)
+
+        if rebuild_comment_metadata:
+            new_comment_metadata_list = []
+            for (source, comment_id), comment in comments_by_linked_id.items():
+                if source == Source.JIRA:
+                    new_comment_metadata_list.append(
+                        CommentMetadata(jira_comment_id=comment_id, github_comment_id=comment.comment_id)
+                    )
+
+            kwargs = dataclasses.asdict(jira_issue.metadata)
+            kwargs["comments"] = new_comment_metadata_list
+            new_metadata = Metadata(**kwargs)
+
+            if not self.dry_run:
+                self.get_client(Source.JIRA).update_issue(jira_issue, {"metadata": new_metadata})
+            else:
+                logger.info("Skipping comment metadata update due to dry run")
 
     def make_mirror_comment(self, source_issue, source_comment, mirror_issue):
         fields = {}
 
         fields["body"] = self.make_mirror_comment_body(source_issue, source_comment)
 
-        metadata = {
-            MetadataField.MIRROR_ID.key: source_comment.comment_id,
-            MetadataField.BODY_HASH.key: source_comment.body_hash,
-        }
-
-        fields["metadata"] = metadata
-
         return fields
 
     def make_mirror_issue(self, source_issue):
         mirror_source = source_issue.source.other
-        mirror_config = self.get_source_config(mirror_source)
 
         fields = {}
 
         fields["title"] = self.make_mirror_issue_title(source_issue)
         fields["body"] = self.make_mirror_issue_body(source_issue)
-
-        if mirror_config.defaults.issue_type:
-            fields["issue_type"] = mirror_config.defaults.issue_type
-
-        if mirror_config.defaults.priority:
-            fields["priority"] = mirror_config.defaults.priority
-
-        if mirror_config.defaults.components:
-            fields["components"] = mirror_config.defaults.components.copy()
+        fields["issue_type"] = _DEFAULT_ISSUE_TYPE
 
         if self.sync_feature_enabled(mirror_source, SyncFeature.SYNC_LABELS):
             fields["labels"] = source_issue.labels.copy()
 
-        sync_labels = self.get_source_config(mirror_source).sync.labels
-        if sync_labels:
-            if "labels" not in fields:
-                fields["labels"] = set()
-            fields["labels"] = fields["labels"] | sync_labels
-
         if self.sync_feature_enabled(mirror_source, SyncFeature.SYNC_MILESTONES):
             fields["milestones"] = source_issue.milestones.copy()
 
-        metadata = {
-            MetadataField.MIRROR_ID.key: source_issue.issue_id,
-            MetadataField.MIRROR_PROJECT.key: source_issue.project,
-            MetadataField.BODY_HASH.key: source_issue.body_hash,
-            MetadataField.TITLE_HASH.key: source_issue.title_hash,
-        }
-
-        fields["metadata"] = metadata
-
-        if self._config.jira.github_repository_field:
-            if source_issue.source == Source.GITHUB:
-                fields["github_repository"] = self._config.github.repository
-
-        if self._config.jira.github_issue_id_field:
-            if source_issue.source == Source.GITHUB:
-                fields["github_issue_id"] = source_issue.issue_id
+        if mirror_source == Source.JIRA:
+            metadata = Metadata(github_repository=source_issue.project, github_issue_id=source_issue.issue_id)
+            fields["metadata"] = metadata
 
         return fields
 
-    def _create_tracking_comment(self, source_issue, mirror_issue):
-        fields = {}
-
-        fields["body"] = self.make_tracking_comment_body(mirror_issue)
-
-        metadata = {MetadataField.IS_TRACKING_COMMENT.key: True}
-        fields["metadata"] = metadata
-
-        issue_metadata = {
-            MetadataField.MIRROR_ID.key: mirror_issue.issue_id,
-            MetadataField.MIRROR_PROJECT.key: mirror_issue.project,
-        }
-        fields["issue_metadata"] = issue_metadata
-
-        logger.info("Creating tracking comment on %s: %s", source_issue, fields)
-
-        if not self.dry_run:
-            self.get_client(source_issue.source).create_comment(source_issue, fields)
-        else:
-            logger.info("Skipping tracking comment create due to dry run")
-
     def make_mirror_issue_title(self, source_issue):
-        return self.redact_text(source_issue.source.other, source_issue.title)
+        title = self.redact_text(source_issue.source.other, source_issue.title)
+
+        custom_formatter = self.get_source_config(source_issue.source.other).issue_title_formatter
+        if custom_formatter:
+            return custom_formatter(source_issue, title)
+        else:
+            return title
 
     def make_mirror_issue_body(self, source_issue):
         mirror_source = source_issue.source.other
         formatter = self.get_formatter(mirror_source)
 
-        user_url = self.url_helper.get_user_profile_url(source_issue.user)
-        user_link = formatter.format_link(user_url, source_issue.user.display_name)
-
-        if source_issue.source == Source.JIRA:
-            link_text = f"{source_issue.issue_id}"
-        else:
-            link_text = f"#{source_issue.issue_id}"
-
-        issue_url = self.url_helper.get_issue_url(source_issue)
-        issue_link = formatter.format_link(issue_url, link_text)
-
         body = self.redact_text(mirror_source, source_issue.body)
         body = formatter.format_body(body)
 
-        return f"_Issue {issue_link} was created on {source_issue.source} by {user_link}:_\r\n\r\n{body}"
+        custom_formatter = self.get_source_config(mirror_source).issue_body_formatter
+        if custom_formatter:
+            return custom_formatter(source_issue, body)
+        else:
+            user_url = self.url_helper.get_user_profile_url(source_issue.user)
+            user_link = formatter.format_link(user_url, source_issue.user.display_name)
+
+            if source_issue.source == Source.JIRA:
+                link_text = f"{source_issue.issue_id}"
+            else:
+                link_text = f"#{source_issue.issue_id}"
+
+            issue_url = self.url_helper.get_issue_url(source_issue)
+            issue_link = formatter.format_link(issue_url, link_text)
+
+            return f"_Issue {issue_link} was created on {source_issue.source} by {user_link}:_\r\n\r\n{body}"
 
     def make_mirror_comment_body(self, source_issue, source_comment):
-        formatter = self.get_formatter(source_comment.source.other)
+        mirror_source = source_comment.source.other
+        formatter = self.get_formatter(mirror_source)
 
-        user_url = self.url_helper.get_user_profile_url(source_comment.user)
-        user_link = formatter.format_link(user_url, source_comment.user.display_name)
-
-        comment_url = self.url_helper.get_comment_url(source_issue, source_comment)
-        comment_link = formatter.format_link(comment_url, str(source_issue.source))
-
-        body = self.redact_text(source_comment.source.other, source_comment.body)
+        body = self.redact_text(mirror_source, source_comment.body)
         body = formatter.format_body(body)
 
-        return f"_Comment by {user_link} on {comment_link}:_\r\n\r\n{body}"
-
-    def make_tracking_comment_body(self, mirror_issue):
-        if mirror_issue.source == Source.JIRA:
-            link_text = f"{mirror_issue.issue_id}"
+        custom_formatter = self.get_source_config(mirror_source).comment_body_formatter
+        if custom_formatter:
+            return custom_formatter(source_issue, source_comment, body)
         else:
-            link_text = f"#{mirror_issue.issue_id}"
+            user_url = self.url_helper.get_user_profile_url(source_comment.user)
+            user_link = formatter.format_link(user_url, source_comment.user.display_name)
 
-        issue_url = self.url_helper.get_issue_url(mirror_issue)
-        formatted_link = self.get_formatter(mirror_issue.source.other).format_link(issue_url, link_text)
-        return f"_Tracked on {mirror_issue.source} as issue {formatted_link}._"
+            comment_url = self.url_helper.get_comment_url(source_issue, source_comment)
+            comment_link = formatter.format_link(comment_url, str(source_issue.source))
+
+            return f"_Comment by {user_link} on {comment_link}:_\r\n\r\n{body}"
 
     def redact_text(self, source, text):
-        for regex in self.get_source_config(source).sync.redact_regexes:
-            for match in regex.finditer(text):
+        for pattern in self.get_source_config(source).redact_patterns:
+            for match in pattern.finditer(text):
                 text = text[: match.start()] + "\u2588" * (match.end() - match.start()) + text[match.end() :]
 
         return text

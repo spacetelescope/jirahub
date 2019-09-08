@@ -172,9 +172,10 @@ class MockJIRAIssueFields:
     )
     created: str = field(default_factory=_jira_now)
     updated: str = field(default_factory=_jira_now)
-    github_repository: str = None
-    github_issue_id: int = None
+    github_issue_url: str = None
+    jirahub_metadata: str = None
     project: MockJIRAProject = field(default_factory=lambda: MockJIRAProject())
+    custom_field: str = None
 
 
 @dataclass
@@ -263,6 +264,7 @@ class MockJIRA:
     ]
 
     UPDATED_RE = re.compile(r"\bupdated > ([0-9]+)\b")
+    ISSUE_URL_RE = re.compile(r"\bgithub_issue_url = '(.*?)'")
 
     valid_servers = []
     valid_basic_auths = []
@@ -308,14 +310,19 @@ class MockJIRA:
 
         return {"permissions": permissions}
 
-    def search_issues(self, jql_str, startAt, maxResults):
-        match = MockJIRA.UPDATED_RE.search(jql_str)
-        if match:
-            ms = int(match.group(1)) / 1000.0
+    def search_issues(self, jql_str, startAt=0, maxResults=50):
+        updated_match = MockJIRA.UPDATED_RE.search(jql_str)
+        issue_url_match = MockJIRA.ISSUE_URL_RE.search(jql_str)
+
+        if updated_match:
+            ms = int(updated_match.group(1)) / 1000.0
             dt = datetime.fromtimestamp(ms, tz=timezone.utc)
             min_updated = _jira_format_datetime(dt)
             # Times in ISO-8601 in the same timezone are comparable lexicographically:
             issues = [i for i in self.issues if i.fields.updated >= min_updated]
+        elif issue_url_match:
+            github_issue_url = issue_url_match.group(1)
+            issues = [i for i in self.issues if i.fields.github_issue_url == github_issue_url]
         else:
             issues = self.issues
 
@@ -418,6 +425,7 @@ class MockGithubIssue:
     milestone: MockGithubMilestone = None
     comments: List[MockGithubComment] = field(default_factory=list)
     pull_request: Dict[str, Any] = None
+    assignee: str = None
 
     def edit(self, body=NotSet, title=NotSet, state=NotSet, labels=NotSet, milestone=NotSet):
         if body != NotSet:
@@ -471,13 +479,14 @@ class MockGithubRepository:
         except StopIteration:
             raise UnknownObjectException(404, {})
 
-    def create_issue(self, title, body=None, milestone=None, labels=[]):
+    def create_issue(self, title, body=None, milestone=None, labels=[], assignee=None):
         issue = MockGithubIssue(
             body=body,
             title=title,
             labels=[MockGithubLabel(name=l) for l in labels],
             milestone=milestone,
             repository=self,
+            assignee=assignee,
         )
 
         self.issues.append(issue)
@@ -560,6 +569,30 @@ class MockClient:
             if min_updated_at is None or issue.updated_at >= min_updated_at:
                 yield issue
 
+    def find_other_issue(self, issue):
+        if issue.source == Source.JIRA:
+            if issue.metadata.github_repository and issue.metadata.github_issue_id:
+                try:
+                    return next(
+                        i
+                        for i in self.issues
+                        if i.project == issue.metadata.github_repository
+                        and i.issue_id == issue.metadata.github_issue_id
+                    )
+                except StopIteration:
+                    return None
+            else:
+                return None
+        else:
+            try:
+                return next(
+                    i
+                    for i in self.issues
+                    if i.metadata.github_repository == issue.project and i.metadata.github_issue_id == issue.issue_id
+                )
+            except StopIteration:
+                return None
+
     def get_issue(self, issue_id):
         try:
             return next(i for i in self.issues if i.issue_id == issue_id)
@@ -578,16 +611,7 @@ class MockClient:
             "is_open": True,
         }
 
-        for field_name in [
-            "title",
-            "is_open",
-            "body",
-            "priority",
-            "issue_type",
-            "metadata",
-            "github_repository",
-            "github_issue_id",
-        ]:
+        for field_name in ["title", "is_open", "body", "priority", "issue_type", "metadata"]:
             if create_fields.get(field_name):
                 fields[field_name] = create_fields[field_name]
 
@@ -605,21 +629,13 @@ class MockClient:
     def update_issue(self, issue, update_fields):
         assert issue.source == self._source
 
-        if ("title" in update_fields or "body" in update_fields or "metadata" in update_fields) and not issue.is_bot:
-            raise ValueError("Cannot update title, body, or metadata of issue owned by another user")
+        if ("title" in update_fields or "body" in update_fields) and not issue.is_bot:
+            raise ValueError("Cannot update title or body of issue owned by another user")
 
         fields = issue.__dict__.copy()
         fields["updated_at"] = now()
 
-        for field_name in [
-            "title",
-            "body",
-            "priority",
-            "issue_type",
-            "metadata",
-            "github_repository",
-            "github_issue_id",
-        ]:
+        for field_name in ["title", "body", "priority", "issue_type", "metadata"]:
             if field_name in update_fields:
                 if update_fields[field_name]:
                     fields[field_name] = update_fields[field_name]
@@ -637,10 +653,12 @@ class MockClient:
             fields["is_open"] = update_fields["is_open"]
 
         updated_issue = Issue(**fields)
-        self.issues.remove(issue)
+        self.issues = [i for i in self.issues if i.issue_id != issue.issue_id]
         self.issues.append(updated_issue)
 
         self.issue_updates += 1
+
+        return updated_issue
 
     def create_comment(self, issue, create_fields):
         assert issue.source == self._source

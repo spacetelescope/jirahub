@@ -55,14 +55,19 @@ def _check_jira_permissions(config):
     if "BROWSE_PROJECTS" not in perms:
         errors.append("JIRA user has not been granted the BROWSE_PROJECTS permission.")
 
-    if config.jira.sync.labels and "EDIT_ISSUES" not in perms:
-        errors.append("jira:sync.labels is defined, but JIRA user has not been granted the EDIT_ISSUES permission.")
+    if "EDIT_ISSUES" not in perms:
+        errors.append("JIRA user has not been granted the EDIT_ISSUES permission.")
+
+    if config.jira.issue_filter and "CREATE_ISSUES" not in perms:
+        errors.append(
+            "c.jira.issue_filter is defined, but JIRA user has not been granted the CREATE_ISSUES permission."
+        )
 
     for sync_feature in SyncFeature:
         for permission in sync_feature.jira_permissions_required:
             if config.is_enabled(Source.JIRA, sync_feature) and permission not in perms:
                 errors.append(
-                    f"{sync_feature} is enabled, but JIRA user has not been granted the {permission} permission."
+                    f"c.jira.{sync_feature.key} is enabled, but JIRA user has not been granted the {permission} permission."
                 )
 
     return errors
@@ -90,11 +95,13 @@ def _check_github_permissions(config):
         return errors
 
     if not repo.permissions.push:
-        if config.github.sync.labels:
-            errors.append("github:sync.labels is defined, but GitHub user has not been granted push permissions.")
+        if config.github.issue_filter:
+            errors.append("c.github.issue_filter is defined, but GitHub user has not been granted push permissions.")
 
         for sync_feature in SyncFeature:
             if config.is_enabled(Source.GITHUB, sync_feature) and sync_feature.github_push_required:
-                errors.append(f"{sync_feature} is enabled, but GitHub user has not been granted push permissions.")
+                errors.append(
+                    f"c.github.{sync_feature.key} is enabled, but GitHub user has not been granted push permissions."
+                )
 
     return errors
