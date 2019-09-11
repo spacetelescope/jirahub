@@ -24,7 +24,7 @@ def _parse_datetime(value):
     return value.replace(tzinfo=timezone.utc)
 
 
-class _IssueTranslator:
+class _IssueMapper:
     """
     This class is responsible for mapping the fields of the GitHub client's resource objects
     to our own in jirahub.entities.
@@ -193,10 +193,10 @@ class Client:
         self._config = config
         self._github = github
         self._repo = github.get_repo(config.github.repository)
-        self._translator = _IssueTranslator(github.get_user().login, self._repo.get_milestones())
+        self._mapper = _IssueMapper(github.get_user().login, self._repo.get_milestones())
 
     def get_user(self, username):
-        return self._translator.get_user(self._github.get_user(username))
+        return self._mapper.get_user(self._github.get_user(username))
 
     def find_issues(self, min_updated_at=None):
         if min_updated_at:
@@ -213,7 +213,7 @@ class Client:
         for raw_issue in raw_issues:
             # The GitHub API treats pull requests as issues (but not the other way around):
             if not raw_issue.pull_request:
-                yield self._translator.get_issue(raw_issue, raw_issue.get_comments())
+                yield self._mapper.get_issue(raw_issue, raw_issue.get_comments())
 
     def find_other_issue(self, jira_issue):
         assert jira_issue.source == Source.JIRA
@@ -221,18 +221,18 @@ class Client:
         if jira_issue.metadata.github_repository and jira_issue.metadata.github_issue_id:
             assert jira_issue.metadata.github_repository == self._config.github.repository
             raw_issue = self._repo.get_issue(jira_issue.metadata.github_issue_id)
-            return self._translator.get_issue(raw_issue, raw_issue.get_comments())
+            return self._mapper.get_issue(raw_issue, raw_issue.get_comments())
         else:
             return None
 
     def get_issue(self, issue_id):
         raw_issue = self._repo.get_issue(issue_id)
-        return self._translator.get_issue(raw_issue, raw_issue.get_comments())
+        return self._mapper.get_issue(raw_issue, raw_issue.get_comments())
 
     def create_issue(self, fields):
-        raw_fields = self._translator.get_raw_issue_fields(fields)
+        raw_fields = self._mapper.get_raw_issue_fields(fields)
         raw_issue = self._repo.create_issue(**raw_fields)
-        new_issue = self._translator.get_issue(raw_issue, [])
+        new_issue = self._mapper.get_issue(raw_issue, [])
 
         logger.info("Created %s", new_issue)
 
@@ -244,9 +244,9 @@ class Client:
         if ("title" in fields or "body" in fields) and not issue.is_bot:
             raise ValueError("Cannot update title or body of issue owned by another user")
 
-        raw_fields = self._translator.get_raw_issue_fields(fields, issue=issue)
+        raw_fields = self._mapper.get_raw_issue_fields(fields, issue=issue)
         issue.raw_issue.edit(**raw_fields)
-        updated_issue = self._translator.get_issue(issue.raw_issue, issue.raw_issue.get_comments())
+        updated_issue = self._mapper.get_issue(issue.raw_issue, issue.raw_issue.get_comments())
 
         logger.info("Updated %s", updated_issue)
 
@@ -255,9 +255,9 @@ class Client:
     def create_comment(self, issue, fields):
         assert issue.source == Source.GITHUB
 
-        raw_fields = self._translator.get_raw_comment_fields(fields)
+        raw_fields = self._mapper.get_raw_comment_fields(fields)
         raw_comment = issue.raw_issue.create_comment(**raw_fields)
-        new_comment = self._translator.get_comment(raw_comment)
+        new_comment = self._mapper.get_comment(raw_comment)
 
         logger.info("Created %s on %s", new_comment, issue)
 
@@ -269,7 +269,7 @@ class Client:
         if not comment.is_bot:
             raise ValueError("Cannot update comment owned by another user")
 
-        raw_fields = self._translator.get_raw_comment_fields(fields, comment=comment)
+        raw_fields = self._mapper.get_raw_comment_fields(fields, comment=comment)
         comment.raw_comment.edit(**raw_fields)
 
         logger.info("Updated %s", comment)

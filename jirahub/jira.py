@@ -32,7 +32,7 @@ def _parse_datetime(value):
     return datetime.strptime(value, _JIRA_DATETIME_FORMAT).astimezone(timezone.utc)
 
 
-class _IssueTranslator:
+class _IssueMapper:
     """
     This class is responsible for mapping the fields of the JIRA client's resource objects
     to our own in jirahub.entities.
@@ -264,10 +264,10 @@ class Client:
     def __init__(self, config, jira, bot_username):
         self._config = config
         self._jira = jira
-        self._translator = _IssueTranslator(config, bot_username)
+        self._mapper = _IssueMapper(config, bot_username)
 
     def get_user(self, username):
-        return self._translator.get_user(self._jira.user(username))
+        return self._mapper.get_user(self._jira.user(username))
 
     def find_issues(self, min_updated_at=None):
         if min_updated_at:
@@ -286,7 +286,7 @@ class Client:
                 # issues one by one seems to fix that.
                 raw_issue = self._jira.issue(raw_issue.key)
                 raw_comments = self._jira.comments(raw_issue)
-                yield self._translator.get_issue(raw_issue, raw_comments)
+                yield self._mapper.get_issue(raw_issue, raw_comments)
 
             if len(raw_issues) < Client._PAGE_SIZE:
                 break
@@ -306,19 +306,19 @@ class Client:
             # Reloading the issue to make sure we get the creator field (see note above).
             raw_issue = self._jira.issue(raw_issues[0].key)
             raw_comments = self._jira.comments(raw_issue)
-            return self._translator.get_issue(raw_issue, raw_comments)
+            return self._mapper.get_issue(raw_issue, raw_comments)
         else:
             return None
 
     def get_issue(self, issue_id):
         raw_issue = self._jira.issue(issue_id)
         raw_comments = self._jira.comments(raw_issue)
-        return self._translator.get_issue(raw_issue, raw_comments)
+        return self._mapper.get_issue(raw_issue, raw_comments)
 
     def create_issue(self, fields):
-        fields = self._translator.get_raw_issue_fields(fields)
+        fields = self._mapper.get_raw_issue_fields(fields)
         raw_issue = self._jira.create_issue(**fields, project=self._config.jira.project_key)
-        new_issue = self._translator.get_issue(raw_issue, [])
+        new_issue = self._mapper.get_issue(raw_issue, [])
 
         logger.info("Created issue %s", new_issue)
 
@@ -330,11 +330,11 @@ class Client:
         if ("title" in fields or "body" in fields) and not issue.is_bot:
             raise ValueError("Cannot update title or body of issue owned by another user")
 
-        raw_fields = self._translator.get_raw_issue_fields(fields, issue=issue)
+        raw_fields = self._mapper.get_raw_issue_fields(fields, issue=issue)
         issue.raw_issue.update(**raw_fields)
 
         raw_comments = self._jira.comments(issue.raw_issue)
-        updated_issue = self._translator.get_issue(issue.raw_issue, raw_comments)
+        updated_issue = self._mapper.get_issue(issue.raw_issue, raw_comments)
 
         logger.info("Updated issue %s", updated_issue)
 
@@ -343,9 +343,9 @@ class Client:
     def create_comment(self, issue, fields):
         assert issue.source == Source.JIRA
 
-        fields = self._translator.get_raw_comment_fields(fields)
+        fields = self._mapper.get_raw_comment_fields(fields)
         raw_comment = self._jira.add_comment(issue=issue.issue_id, **fields)
-        new_comment = self._translator.get_comment(raw_comment)
+        new_comment = self._mapper.get_comment(raw_comment)
 
         logger.info("Created comment %s on issue %s", new_comment, issue)
 
@@ -357,9 +357,9 @@ class Client:
         if not comment.is_bot:
             raise ValueError("Cannot update comment owned by another user")
 
-        fields = self._translator.get_raw_comment_fields(fields, comment=comment)
+        fields = self._mapper.get_raw_comment_fields(fields, comment=comment)
         comment.raw_comment.update(**fields)
-        updated_comment = self._translator.get_comment(comment.raw_comment)
+        updated_comment = self._mapper.get_comment(comment.raw_comment)
 
         logger.info("Updated comment %s", updated_comment)
 
