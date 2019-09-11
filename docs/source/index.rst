@@ -153,7 +153,7 @@ These are parameters particular to GitHub.  The ``repository`` parameter is requ
    * - c.github.comment_body_formatter
      - Callable that transforms the JIRA comment body before creating/updating it
        in GitHub.  See `Custom formatters`_ for further detail.
-   * - c.jira.issue_filter
+   * - c.github.issue_filter
      - Callable that selects JIRA issues that will be created in GitHub.  See
        `Issue filters`_ for further detail.
    * - c.github.before_issue_create
