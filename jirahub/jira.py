@@ -33,6 +33,11 @@ def _parse_datetime(value):
 
 
 class _IssueTranslator:
+    """
+    This class is responsible for mapping the fields of the JIRA client's resource objects
+    to our own in jirahub.entities.
+    """
+
     def __init__(self, config, bot_username):
         self._config = config
         self._bot_username = bot_username

@@ -25,6 +25,11 @@ def _parse_datetime(value):
 
 
 class _IssueTranslator:
+    """
+    This class is responsible for mapping the fields of the GitHub client's resource objects
+    to our own in jirahub.entities.
+    """
+
     def __init__(self, bot_username, raw_milestones):
         self._bot_username = bot_username
         self._raw_milestones_by_name = {m.title: m for m in raw_milestones}
