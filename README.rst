@@ -1,16 +1,11 @@
-A package for syncing JIRA tickets and Github issues
+Jirahub: a package for syncing JIRA tickets and GitHub issues
 ----------------------------------------------------
 
-.. image:: http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat
-    :target: http://www.astropy.org
-    :alt: Powered by Astropy Badge
+This package provides a configurable tool for syncing tickets in a JIRA project and issues in a GitHub repository.
 
-This package provides classes and a template to set up a customized script for syncing tickets in a JIRA project and issues in a Github repository.
-
-Please see the documentation for more information
-
+Please see `the documentation <http://jirahub.readthedocs.io/en/latest/>`_ for more information
 
 License
 -------
 
-This project is Copyright (c) Association of Universities for Research in Astronomy (AURA) and licensed under the terms of the BSD 3-Clause license. See the licenses folder for more information.
+This project is Copyright (c) Association of Universities for Research in Astronomy (AURA) and licensed under the terms of the BSD 3-Clause license. See `LICENSE.rst <LICENSE.rst>`_ for more information.
