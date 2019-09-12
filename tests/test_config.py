@@ -1,9 +1,10 @@
 import pytest
 from pathlib import Path
 import re
+import copy
 
 import jirahub
-from jirahub.config import load_config, generate_config_template, SyncFeature, JirahubConfig, validate_config
+from jirahub.config import load_config, generate_config_template, SyncFeature, validate_config, _REQUIRED_PARAMETERS
 from jirahub.entities import Source
 
 
@@ -15,8 +16,8 @@ def test_load_config_minimal():
 
     assert config.jira.server == "https://test.jira.server"
     assert config.jira.project_key == "TEST"
-    assert config.jira.github_issue_url_field == "github_issue_url"
-    assert config.jira.jirahub_metadata_field == "jirahub_metadata"
+    assert config.jira.github_issue_url_field_id == "github_issue_url"
+    assert config.jira.jirahub_metadata_field_id == "jirahub_metadata"
     assert config.jira.closed_statuses == ["closed"]
     assert config.jira.close_status == "Closed"
     assert config.jira.reopen_status == "Reopened"
@@ -51,8 +52,8 @@ def test_load_config_full():
 
     assert config.jira.server == "https://test.jira.server"
     assert config.jira.project_key == "TEST"
-    assert config.jira.github_issue_url_field == "custom_github_issue_url"
-    assert config.jira.jirahub_metadata_field == "custom_jirahub_metadata"
+    assert config.jira.github_issue_url_field_id == "custom_github_issue_url"
+    assert config.jira.jirahub_metadata_field_id == "custom_jirahub_metadata"
     assert config.jira.closed_statuses == ["Closed", "Done"]
     assert config.jira.close_status == "Done"
     assert config.jira.reopen_status == "Ready"
@@ -115,28 +116,16 @@ def test_generate_config_template():
     assert generate_config_template() == expected
 
 
-def test_validate_config():
-    config = JirahubConfig()
-    config.jira.server = "some-server"
-    config.jira.project_key = "some-project"
-    config.github.repository = "some-repository"
-
+def test_validate_config(config):
     # Initially, no exceptions
     validate_config(config)
 
-    config.jira.server = None
-    with pytest.raises(RuntimeError):
-        validate_config(config)
-
-    config.jira.server = "some-server"
-    config.jira.project_key = None
-    with pytest.raises(RuntimeError):
-        validate_config(config)
-
-    config.jira.project_key = "some-project"
-    config.github.repository = None
-    with pytest.raises(RuntimeError):
-        validate_config(config)
+    for param, _ in _REQUIRED_PARAMETERS:
+        invalid_config = copy.deepcopy(config)
+        parts = param.split(".")
+        setattr(getattr(invalid_config, parts[0]), parts[1], None)
+        with pytest.raises(RuntimeError):
+            validate_config(invalid_config)
 
 
 class TestJirahubConfig:

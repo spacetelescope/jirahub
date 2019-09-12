@@ -39,8 +39,8 @@ class SyncFeature(Enum):
 class JiraConfig:
     server: str = None
     project_key: str = None
-    github_issue_url_field: str = "github_issue_url"
-    jirahub_metadata_field: str = "jirahub_metadata"
+    github_issue_url_field_id: str = None
+    jirahub_metadata_field_id: str = None
     closed_statuses: List[str] = field(default_factory=lambda: ["closed"])
     close_status: str = "Closed"
     reopen_status: str = "Reopened"
@@ -111,12 +111,19 @@ def generate_config_template():
     return importlib_resources.read_text(jirahub_resources, "config_template.py")
 
 
+_REQUIRED_PARAMETERS = {
+    ("jira.server", "JIRA server"),
+    ("jira.project_key", "JIRA project key"),
+    ("jira.github_issue_url_field_id", "JIRA issue URL field ID"),
+    ("jira.jirahub_metadata_field_id", "JIRA metadata field ID"),
+    ("github.repository", "GitHub repository"),
+}
+
+
 def validate_config(config):
-    if not config.jira.server:
-        raise RuntimeError("Missing JIRA server, please set c.jira.server in your config file")
-
-    if not config.jira.project_key:
-        raise RuntimeError("Missing JIRA project key, please set c.jira.project_key in your config file")
-
-    if not config.github.repository:
-        raise RuntimeError("Missing GitHub repository, please set c.github.repository in your config file")
+    for param, description in _REQUIRED_PARAMETERS:
+        value = config
+        for part in param.split("."):
+            value = getattr(value, part)
+        if not value:
+            raise RuntimeError(f"Missing {description}, please set c.{param} in your config file")

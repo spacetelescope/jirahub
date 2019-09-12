@@ -214,13 +214,13 @@ class _IssueMapper:
     def _get_metadata(self, raw_issue):
         kwargs = {}
 
-        github_issue_url = getattr(raw_issue.fields, self._config.jira.github_issue_url_field)
+        github_issue_url = getattr(raw_issue.fields, self._config.jira.github_issue_url_field_id)
         if github_issue_url:
             github_repository, github_issue_id = utils.extract_github_ids_from_url(github_issue_url)
             kwargs["github_repository"] = github_repository
             kwargs["github_issue_id"] = github_issue_id
 
-        metadata_json = getattr(raw_issue.fields, self._config.jira.jirahub_metadata_field)
+        metadata_json = getattr(raw_issue.fields, self._config.jira.jirahub_metadata_field_id)
         if metadata_json:
             metadata_dict = json.loads(metadata_json)
             kwargs.update(metadata_dict)
@@ -234,18 +234,21 @@ class _IssueMapper:
         raw_fields = {}
 
         if not metadata:
-            return {self._config.jira.github_issue_url_field: None, self._config.jira.jirahub_metadata_field: None}
+            return {
+                self._config.jira.github_issue_url_field_id: None,
+                self._config.jira.jirahub_metadata_field_id: None,
+            }
 
         if metadata.github_repository and metadata.github_issue_id:
             github_issue_url = utils.make_github_issue_url(metadata.github_repository, metadata.github_issue_id)
         else:
             github_issue_url = None
-        raw_fields[self._config.jira.github_issue_url_field] = github_issue_url
+        raw_fields[self._config.jira.github_issue_url_field_id] = github_issue_url
 
         metadata_dict = dataclasses.asdict(metadata)
         metadata_dict.pop("github_repository")
         metadata_dict.pop("github_issue_id")
-        raw_fields[self._config.jira.jirahub_metadata_field] = json.dumps(metadata_dict)
+        raw_fields[self._config.jira.jirahub_metadata_field_id] = json.dumps(metadata_dict)
 
         return raw_fields
 
@@ -387,7 +390,7 @@ class Client:
 
         if github_issue_url:
             quoted_url = self._quote_query_string(github_issue_url)
-            filters.append(f"{self._config.jira.github_issue_url_field} = {quoted_url}")
+            filters.append(f"{self._config.jira.github_issue_url_field_id} = {quoted_url}")
 
         return " and ".join(filters) + " order by updated asc"
 

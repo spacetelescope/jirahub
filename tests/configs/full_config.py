@@ -4,8 +4,8 @@ import re
 
 c.jira.server = "https://test.jira.server"
 c.jira.project_key = "TEST"
-c.jira.github_issue_url_field = "custom_github_issue_url"
-c.jira.jirahub_metadata_field = "custom_jirahub_metadata"
+c.jira.github_issue_url_field_id = "custom_github_issue_url"
+c.jira.jirahub_metadata_field_id = "custom_jirahub_metadata"
 c.jira.closed_statuses = ["Closed", "Done"]
 c.jira.close_status = "Done"
 c.jira.reopen_status = "Ready"
