@@ -11,6 +11,7 @@ c.jira.close_status = "Done"
 c.jira.reopen_status = "Ready"
 c.jira.open_status = "Open"
 c.jira.issue_filter = lambda issue: True
+c.jira.notify_watchers = False
 c.jira.sync_comments = True
 c.jira.sync_status = True
 c.jira.sync_labels = True

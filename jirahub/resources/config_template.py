@@ -34,6 +34,9 @@ c.jira.jirahub_metadata_field_id =
 # Maximum number of retries on JIRA request failure
 #c.jira.max_retries = 3
 
+# Notify watchers when an issue is updated by the bot
+#c.jira.notify_watchers = True
+
 # Create JIRA comments from GitHub comments
 #c.jira.sync_comments = False
 

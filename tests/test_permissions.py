@@ -74,6 +74,22 @@ def test_check_permissions_jira_issue_filter(config):
     assert "c.jira.issue_filter" in errors[0]
 
 
+def test_check_permissions_notify_watchers(config):
+    config.jira.notify_watchers = False
+
+    mocks.MockJIRA.permissions = mocks.MockJIRA.ALL_PERMISSIONS
+    errors = check_permissions(config)
+    assert len(errors) == 0
+
+    mocks.MockJIRA.permissions = [
+        p for p in mocks.MockJIRA.ALL_PERMISSIONS if p not in {"ADMINISTER", "ADMINISTER_PROJECTS", "SYSTEM_ADMIN"}
+    ]
+    errors = check_permissions(config)
+    assert len(errors) == 1
+    assert "ADMINISTER_PROJECTS" in errors[0]
+    assert "c.jira.notify_watchers" in errors[0]
+
+
 @pytest.mark.parametrize(
     "sync_feature, permission",
     [

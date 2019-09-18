@@ -135,11 +135,11 @@ class MockJIRAComment:
     created: str = field(default_factory=_jira_now)
     updated: str = field(default_factory=_jira_now)
 
-    def update(self, body):
+    def update(self, fields=None, async_=None, jira=None, body="", visibility=None):
         self.body = body
         self.updated = _jira_now()
 
-    def delete(self):
+    def delete(self, params=None):
         self.jira.comments_list.remove(self)
 
 
@@ -183,7 +183,7 @@ class MockJIRAIssue:
     fields: MockJIRAIssueFields
     key: str = field(default_factory=next_jira_issue_id)
 
-    def update(self, **fieldargs):
+    def update(self, fields=None, update=None, async_=None, jira=None, notify=True, **fieldargs):
         fieldargs = _jira_process_issue_fieldargs(fieldargs)
 
         for key, value in fieldargs.items():

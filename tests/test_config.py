@@ -22,6 +22,8 @@ def test_load_config_minimal():
     assert config.jira.close_status == "Closed"
     assert config.jira.reopen_status == "Reopened"
     assert config.jira.open_status is None
+    assert config.jira.max_retries == 3
+    assert config.jira.notify_watchers is True
     assert config.jira.sync_comments is False
     assert config.jira.sync_status is False
     assert config.jira.sync_labels is False
@@ -59,6 +61,7 @@ def test_load_config_full():
     assert config.jira.reopen_status == "Ready"
     assert config.jira.open_status == "Open"
     assert config.jira.max_retries == 5
+    assert config.jira.notify_watchers is False
     assert config.jira.sync_comments is True
     assert config.jira.sync_status is True
     assert config.jira.sync_labels is True

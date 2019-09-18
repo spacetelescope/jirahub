@@ -334,7 +334,7 @@ class Client:
             raise ValueError("Cannot update title or body of issue owned by another user")
 
         raw_fields = self._mapper.get_raw_issue_fields(fields, issue=issue)
-        issue.raw_issue.update(**raw_fields)
+        issue.raw_issue.update(notify=self._config.jira.notify_watchers, **raw_fields)
 
         raw_comments = self._jira.comments(issue.raw_issue)
         updated_issue = self._mapper.get_issue(issue.raw_issue, raw_comments)

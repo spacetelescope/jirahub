@@ -63,6 +63,13 @@ def _check_jira_permissions(config):
             "c.jira.issue_filter is defined, but JIRA user has not been granted the CREATE_ISSUES permission."
         )
 
+    if not config.jira.notify_watchers and not perms.intersection(
+        {"SYSTEM_ADMIN", "ADMINISTER", "ADMINISTER_PROJECTS"}
+    ):
+        errors.append(
+            "c.jira.notify_watchers is False, but JIRA user has not been granted the ADMINISTER_PROJECTS permission."
+        )
+
     for sync_feature in SyncFeature:
         for permission in sync_feature.jira_permissions_required:
             if config.is_enabled(Source.JIRA, sync_feature) and permission not in perms:

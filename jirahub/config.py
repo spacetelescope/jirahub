@@ -46,6 +46,7 @@ class JiraConfig:
     reopen_status: str = "Reopened"
     open_status: str = None
     max_retries: int = 3
+    notify_watchers: bool = True
     sync_comments: bool = False
     sync_status: bool = False
     sync_labels: bool = False
