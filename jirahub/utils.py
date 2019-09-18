@@ -1,9 +1,28 @@
 import urllib.parse
+import re
+import logging
 
 from .entities import Source
 
 
 __all__ = ["UrlHelper", "isolate_regions"]
+
+
+logger = logging.getLogger(__name__)
+
+_GITHUB_URL_RE = re.compile(r"https://github.com/(.*)/issues/([0-9]+)")
+
+
+def make_github_issue_url(github_repository, github_issue_id):
+    return f"https://github.com/{github_repository}/issues/{github_issue_id}"
+
+
+def extract_github_ids_from_url(github_url):
+    match = _GITHUB_URL_RE.match(github_url)
+    if match:
+        return match.group(1), int(match.group(2))
+    else:
+        return None, None
 
 
 class UrlHelper:
@@ -25,7 +44,7 @@ class UrlHelper:
         if source == Source.JIRA:
             return f"{self._jira_server}/browse/{issue_id}"
         else:
-            return f"https://github.com/{self._github_repository}/issues/{issue_id}"
+            return make_github_issue_url(self._github_repository, issue_id)
 
     def get_pull_request_url(self, pull_request_id):
         return f"https://github.com/{self._github_repository}/pull/{pull_request_id}"

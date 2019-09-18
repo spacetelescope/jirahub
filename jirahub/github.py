@@ -1,5 +1,4 @@
 import logging
-import json
 import re
 import os
 from datetime import timezone
@@ -25,45 +24,12 @@ def _parse_datetime(value):
     return value.replace(tzinfo=timezone.utc)
 
 
-_ISSUE_METADATA_PREFIX = "\r\n\r\n<!-- JIRAHUB-ISSUE-METADATA-1.0.0\r\n"
-_ISSUE_METADATA_SUFFIX = "\r\n-->"
-_ISSUE_METADATA_RE = re.compile(re.escape(_ISSUE_METADATA_PREFIX) + ".*?" + re.escape(_ISSUE_METADATA_SUFFIX))
+class _IssueMapper:
+    """
+    This class is responsible for mapping the fields of the GitHub client's resource objects
+    to our own in jirahub.entities.
+    """
 
-_COMMENT_METADATA_PREFIX = "\r\n\r\n<!-- JIRAHUB-COMMENT-METADATA-1.0.0\r\n"
-_COMMENT_METADATA_SUFFIX = "\r\n-->"
-_COMMENT_METADATA_RE = re.compile(re.escape(_COMMENT_METADATA_PREFIX) + ".*?" + re.escape(_COMMENT_METADATA_SUFFIX))
-
-
-def _encode_metadata(metadata, prefix, suffix):
-    metadata_json = json.dumps(metadata)
-    return prefix + metadata_json + suffix
-
-
-def _decode_metadata(metadata_str, prefix, suffix):
-    assert metadata_str.startswith(prefix)
-    assert metadata_str.endswith(suffix)
-
-    metadata_json = metadata_str[len(prefix) : len(metadata_str) - len(suffix)]
-    return json.loads(metadata_json)
-
-
-def _encode_issue_metadata(metadata):
-    return _encode_metadata(metadata, _ISSUE_METADATA_PREFIX, _ISSUE_METADATA_SUFFIX)
-
-
-def _decode_issue_metadata(metadata_str):
-    return _decode_metadata(metadata_str, _ISSUE_METADATA_PREFIX, _ISSUE_METADATA_SUFFIX)
-
-
-def _encode_comment_metadata(metadata):
-    return _encode_metadata(metadata, _COMMENT_METADATA_PREFIX, _COMMENT_METADATA_SUFFIX)
-
-
-def _decode_comment_metadata(metadata_str):
-    return _decode_metadata(metadata_str, _COMMENT_METADATA_PREFIX, _COMMENT_METADATA_SUFFIX)
-
-
-class _IssueTranslator:
     def __init__(self, bot_username, raw_milestones):
         self._bot_username = bot_username
         self._raw_milestones_by_name = {m.title: m for m in raw_milestones}
@@ -84,22 +50,7 @@ class _IssueTranslator:
         if body is None:
             body = ""
 
-        match = _COMMENT_METADATA_RE.search(body)
-        if match:
-            metadata = _decode_comment_metadata(match.group(0))
-            body = body[0 : match.start()] + body[match.end() :]
-        else:
-            metadata = {}
-
-        match = _ISSUE_METADATA_RE.search(body)
-        if match:
-            issue_metadata = _decode_issue_metadata(match.group(0))
-            body = body[0 : match.start()] + body[match.end() :]
-        else:
-            issue_metadata = {}
-
         comment_id = raw_comment.id
-
         created_at = _parse_datetime(raw_comment.created_at)
         updated_at = _parse_datetime(raw_comment.updated_at)
 
@@ -111,45 +62,17 @@ class _IssueTranslator:
             updated_at=updated_at,
             user=user,
             body=body,
-            metadata=metadata,
-            issue_metadata=issue_metadata,
             raw_comment=raw_comment,
         )
 
     def get_raw_comment_fields(self, fields, comment=None):
         raw_fields = {}
 
-        if "body" in fields or "metadata" in fields or "issue_metadata" in fields:
-            if "body" in fields:
-                if fields["body"]:
-                    body = fields["body"]
-                else:
-                    body = ""
-            elif comment and comment.body:
-                body = comment.body
+        if "body" in fields:
+            if fields["body"]:
+                body = fields["body"]
             else:
                 body = ""
-
-            if "metadata" in fields:
-                metadata = fields["metadata"]
-            elif comment:
-                metadata = comment.metadata
-            else:
-                metadata = {}
-
-            if "issue_metadata" in fields:
-                issue_metadata = fields["issue_metadata"]
-            elif comment:
-                issue_metadata = comment.issue_metadata
-            else:
-                issue_metadata = {}
-
-            if metadata:
-                body = body + _encode_comment_metadata(metadata)
-
-            if issue_metadata:
-                body = body + _encode_issue_metadata(issue_metadata)
-
             raw_fields["body"] = body
 
         return raw_fields
@@ -163,13 +86,6 @@ class _IssueTranslator:
         body = raw_issue.body
         if body is None:
             body = ""
-
-        match = _ISSUE_METADATA_RE.search(body)
-        if match:
-            metadata = _decode_issue_metadata(match.group(0))
-            body = body[0 : match.start()] + body[match.end() :]
-        else:
-            metadata = {}
 
         issue_id = raw_issue.number
         project = raw_issue.repository.full_name
@@ -200,38 +116,23 @@ class _IssueTranslator:
             is_open=is_open,
             milestones=milestones,
             comments=comments,
-            metadata=metadata,
             raw_issue=raw_issue,
         )
 
     def get_raw_issue_fields(self, fields, issue=None):
+        fields = fields.copy()
         raw_fields = {}
 
         if "title" in fields:
-            raw_fields["title"] = fields["title"]
+            raw_fields["title"] = fields.pop("title")
 
-        if "body" in fields or "metadata" in fields:
-            if "body" in fields:
-                if fields["body"]:
-                    body = fields["body"]
-                else:
-                    body = ""
-            elif issue and issue.body:
-                body = issue.body
+        if "body" in fields:
+            if fields["body"]:
+                body = fields["body"]
             else:
                 body = ""
-
-            if "metadata" in fields:
-                metadata = fields["metadata"]
-            elif issue:
-                metadata = issue.metadata
-            else:
-                metadata = {}
-
-            if metadata:
-                body = body + _encode_issue_metadata(metadata)
-
             raw_fields["body"] = body
+            fields.pop("body")
 
         if "milestones" in fields:
             raw_milestones = []
@@ -261,19 +162,23 @@ class _IssueTranslator:
                 raw_fields["milestone"] = raw_milestones[0]
             elif issue:
                 raw_fields["milestone"] = None
+            fields.pop("milestones")
 
         if "labels" in fields:
             if fields["labels"]:
                 raw_fields["labels"] = list(fields["labels"])
             else:
                 raw_fields["labels"] = []
+            fields.pop("labels")
 
         if "is_open" in fields:
             if fields["is_open"]:
                 raw_fields["state"] = "open"
             else:
                 raw_fields["state"] = "closed"
+            fields.pop("is_open")
 
+        raw_fields.update(fields)
         return raw_fields
 
 
@@ -288,10 +193,10 @@ class Client:
         self._config = config
         self._github = github
         self._repo = github.get_repo(config.github.repository)
-        self._translator = _IssueTranslator(github.get_user().login, self._repo.get_milestones())
+        self._mapper = _IssueMapper(github.get_user().login, self._repo.get_milestones())
 
     def get_user(self, username):
-        return self._translator.get_user(self._github.get_user(username))
+        return self._mapper.get_user(self._github.get_user(username))
 
     def find_issues(self, min_updated_at=None):
         if min_updated_at:
@@ -308,16 +213,26 @@ class Client:
         for raw_issue in raw_issues:
             # The GitHub API treats pull requests as issues (but not the other way around):
             if not raw_issue.pull_request:
-                yield self._translator.get_issue(raw_issue, raw_issue.get_comments())
+                yield self._mapper.get_issue(raw_issue, raw_issue.get_comments())
+
+    def find_other_issue(self, jira_issue):
+        assert jira_issue.source == Source.JIRA
+
+        if jira_issue.metadata.github_repository and jira_issue.metadata.github_issue_id:
+            assert jira_issue.metadata.github_repository == self._config.github.repository
+            raw_issue = self._repo.get_issue(jira_issue.metadata.github_issue_id)
+            return self._mapper.get_issue(raw_issue, raw_issue.get_comments())
+        else:
+            return None
 
     def get_issue(self, issue_id):
         raw_issue = self._repo.get_issue(issue_id)
-        return self._translator.get_issue(raw_issue, raw_issue.get_comments())
+        return self._mapper.get_issue(raw_issue, raw_issue.get_comments())
 
     def create_issue(self, fields):
-        raw_fields = self._translator.get_raw_issue_fields(fields)
+        raw_fields = self._mapper.get_raw_issue_fields(fields)
         raw_issue = self._repo.create_issue(**raw_fields)
-        new_issue = self._translator.get_issue(raw_issue, [])
+        new_issue = self._mapper.get_issue(raw_issue, [])
 
         logger.info("Created %s", new_issue)
 
@@ -326,20 +241,23 @@ class Client:
     def update_issue(self, issue, fields):
         assert issue.source == Source.GITHUB
 
-        if ("title" in fields or "body" in fields or "metadata" in fields) and not issue.is_bot:
-            raise ValueError("Cannot update title, body, or metadata of issue owned by another user")
+        if ("title" in fields or "body" in fields) and not issue.is_bot:
+            raise ValueError("Cannot update title or body of issue owned by another user")
 
-        raw_fields = self._translator.get_raw_issue_fields(fields, issue=issue)
+        raw_fields = self._mapper.get_raw_issue_fields(fields, issue=issue)
         issue.raw_issue.edit(**raw_fields)
+        updated_issue = self._mapper.get_issue(issue.raw_issue, issue.raw_issue.get_comments())
 
-        logger.info("Updated %s", issue)
+        logger.info("Updated %s", updated_issue)
+
+        return updated_issue
 
     def create_comment(self, issue, fields):
         assert issue.source == Source.GITHUB
 
-        raw_fields = self._translator.get_raw_comment_fields(fields)
+        raw_fields = self._mapper.get_raw_comment_fields(fields)
         raw_comment = issue.raw_issue.create_comment(**raw_fields)
-        new_comment = self._translator.get_comment(raw_comment)
+        new_comment = self._mapper.get_comment(raw_comment)
 
         logger.info("Created %s on %s", new_comment, issue)
 
@@ -351,7 +269,7 @@ class Client:
         if not comment.is_bot:
             raise ValueError("Cannot update comment owned by another user")
 
-        raw_fields = self._translator.get_raw_comment_fields(fields, comment=comment)
+        raw_fields = self._mapper.get_raw_comment_fields(fields, comment=comment)
         comment.raw_comment.edit(**raw_fields)
 
         logger.info("Updated %s", comment)

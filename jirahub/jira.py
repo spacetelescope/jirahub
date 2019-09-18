@@ -1,14 +1,14 @@
-import base64
 import json
 import re
 from datetime import datetime, timezone
 import logging
 import os
+import dataclasses
 
 from jira import JIRA
 
-from .entities import Issue, Comment, User, Source
-from .utils import isolate_regions
+from .entities import Issue, Comment, User, Source, Metadata, CommentMetadata
+from . import utils
 
 
 __all__ = ["Client", "Formatter", "get_username", "get_password"]
@@ -32,50 +32,12 @@ def _parse_datetime(value):
     return datetime.strptime(value, _JIRA_DATETIME_FORMAT).astimezone(timezone.utc)
 
 
-_ISSUE_METADATA_PREFIX = "\r\n\r\n{anchor:JIRAHUB-ISSUE-METADATA-1.0.0-"
-_ISSUE_METADATA_SUFFIX = "}"
-_ISSUE_METADATA_RE = re.compile(re.escape(_ISSUE_METADATA_PREFIX) + ".*?" + re.escape(_ISSUE_METADATA_SUFFIX))
+class _IssueMapper:
+    """
+    This class is responsible for mapping the fields of the JIRA client's resource objects
+    to our own in jirahub.entities.
+    """
 
-
-_COMMENT_METADATA_PREFIX = "\r\n\r\n{anchor:JIRAHUB-COMMENT-METADATA-1.0.0-"
-_COMMENT_METADATA_SUFFIX = "}"
-_COMMENT_METADATA_RE = re.compile(re.escape(_COMMENT_METADATA_PREFIX) + ".*?" + re.escape(_COMMENT_METADATA_SUFFIX))
-
-
-def _encode_metadata(metadata, prefix, suffix):
-    metadata_json = json.dumps(metadata)
-    metadata_base32 = base64.b32encode(metadata_json.encode("utf-8")).decode("utf-8")
-
-    return prefix + metadata_base32 + suffix
-
-
-def _decode_metadata(metadata_str, prefix, suffix):
-    assert metadata_str.startswith(prefix)
-    assert metadata_str.endswith(suffix)
-
-    metadata_base32 = metadata_str[len(prefix) : len(metadata_str) - len(suffix)]
-    metadata_json = base64.b32decode(metadata_base32.encode("utf-8")).decode("utf-8")
-
-    return json.loads(metadata_json)
-
-
-def _encode_issue_metadata(metadata):
-    return _encode_metadata(metadata, _ISSUE_METADATA_PREFIX, _ISSUE_METADATA_SUFFIX)
-
-
-def _decode_issue_metadata(metadata_str):
-    return _decode_metadata(metadata_str, _ISSUE_METADATA_PREFIX, _ISSUE_METADATA_SUFFIX)
-
-
-def _encode_comment_metadata(metadata):
-    return _encode_metadata(metadata, _COMMENT_METADATA_PREFIX, _COMMENT_METADATA_SUFFIX)
-
-
-def _decode_comment_metadata(metadata_str):
-    return _decode_metadata(metadata_str, _COMMENT_METADATA_PREFIX, _COMMENT_METADATA_SUFFIX)
-
-
-class _IssueTranslator:
     def __init__(self, config, bot_username):
         self._config = config
         self._bot_username = bot_username
@@ -96,20 +58,6 @@ class _IssueTranslator:
         if body is None:
             body = ""
 
-        match = _COMMENT_METADATA_RE.search(body)
-        if match:
-            metadata = _decode_comment_metadata(match.group(0))
-            body = body[0 : match.start()] + body[match.end() :]
-        else:
-            metadata = {}
-
-        match = _ISSUE_METADATA_RE.search(body)
-        if match:
-            issue_metadata = _decode_issue_metadata(match.group(0))
-            body = body[0 : match.start()] + body[match.end() :]
-        else:
-            issue_metadata = {}
-
         comment_id = raw_comment.id
 
         created_at = _parse_datetime(raw_comment.created)
@@ -123,45 +71,17 @@ class _IssueTranslator:
             updated_at=updated_at,
             user=user,
             body=body,
-            metadata=metadata,
-            issue_metadata=issue_metadata,
             raw_comment=raw_comment,
         )
 
     def get_raw_comment_fields(self, fields, comment=None):
         raw_fields = {}
 
-        if "body" in fields or "metadata" in fields or "issue_metadata" in fields:
-            if "body" in fields:
-                if fields["body"]:
-                    body = fields["body"]
-                else:
-                    body = ""
-            elif comment and comment.body:
-                body = comment.body
+        if "body" in fields:
+            if fields["body"]:
+                body = fields["body"]
             else:
                 body = ""
-
-            if "metadata" in fields:
-                metadata = fields["metadata"]
-            elif comment:
-                metadata = comment.metadata
-            else:
-                metadata = {}
-
-            if "issue_metadata" in fields:
-                issue_metadata = fields["issue_metadata"]
-            elif comment:
-                issue_metadata = comment.issue_metadata
-            else:
-                issue_metadata = {}
-
-            if metadata:
-                body = body + _encode_comment_metadata(metadata)
-
-            if issue_metadata:
-                body = body + _encode_issue_metadata(issue_metadata)
-
             raw_fields["body"] = body
 
         return raw_fields
@@ -175,13 +95,6 @@ class _IssueTranslator:
         body = raw_issue.fields.description
         if body is None:
             body = ""
-
-        match = _ISSUE_METADATA_RE.search(body)
-        if match:
-            metadata = _decode_issue_metadata(match.group(0))
-            body = body[0 : match.start()] + body[match.end() :]
-        else:
-            metadata = {}
 
         issue_id = raw_issue.key
         project = raw_issue.fields.project.key
@@ -202,19 +115,9 @@ class _IssueTranslator:
         else:
             issue_type = None
 
-        is_open = raw_issue.fields.status.name.lower() not in self._config.jira.closed_statuses
+        is_open = raw_issue.fields.status.name.lower() not in [s.lower() for s in self._config.jira.closed_statuses]
 
-        if self._config.jira.github_repository_field:
-            github_repository = getattr(raw_issue.fields, self._config.jira.github_repository_field)
-        else:
-            github_repository = None
-
-        if self._config.jira.github_issue_id_field:
-            github_issue_id = getattr(raw_issue.fields, self._config.jira.github_issue_id_field)
-            if github_issue_id:
-                github_issue_id = int(github_issue_id)
-        else:
-            github_issue_id = None
+        metadata = self._get_metadata(raw_issue)
 
         return Issue(
             source=Source.JIRA,
@@ -235,65 +138,56 @@ class _IssueTranslator:
             comments=comments,
             metadata=metadata,
             raw_issue=raw_issue,
-            github_repository=github_repository,
-            github_issue_id=github_issue_id,
         )
 
     def get_raw_issue_fields(self, fields, issue=None):
+        fields = fields.copy()
         raw_fields = {}
 
         if "title" in fields:
-            raw_fields["summary"] = fields["title"]
+            raw_fields["summary"] = fields.pop("title")
 
-        if "body" in fields or "metadata" in fields:
-            if "body" in fields:
-                if fields["body"]:
-                    body = fields["body"]
-                else:
-                    body = ""
-            elif issue and issue.body:
-                body = issue.body
+        if "body" in fields:
+            if fields["body"]:
+                body = fields["body"]
             else:
                 body = ""
-
-            if "metadata" in fields:
-                metadata = fields["metadata"]
-            elif issue:
-                metadata = issue.metadata
-            else:
-                metadata = {}
-
-            if metadata:
-                body = body + _encode_issue_metadata(metadata)
-
             raw_fields["description"] = body
+            fields.pop("body")
+
+        if "metadata" in fields:
+            raw_fields.update(self._get_raw_metadata_fields(fields.pop("metadata")))
 
         if "labels" in fields:
             if fields["labels"]:
                 raw_fields["labels"] = list(fields["labels"])
             else:
                 raw_fields["labels"] = []
+            fields.pop("labels")
 
         if "milestones" in fields:
             if fields["milestones"]:
                 raw_fields["fixVersions"] = self._make_name_list(fields["milestones"])
             else:
                 raw_fields["fixVersions"] = []
+            fields.pop("milestones")
 
         if "components" in fields:
             if fields["components"]:
                 raw_fields["components"] = self._make_name_list(fields["components"])
             else:
                 raw_fields["components"] = []
+            fields.pop("components")
 
         if "priority" in fields:
             if fields["priority"]:
                 raw_fields["priority"] = {"name": fields["priority"]}
             else:
                 raw_fields["priority"] = None
+            fields.pop("priority")
 
         if "issue_type" in fields:
-            raw_fields["issuetype"] = {"name": fields["issue_type"]}
+            raw_fields["issuetype"] = {"name": fields.pop("issue_type")}
 
         if "is_open" in fields or issue is None:
             if "is_open" in fields:
@@ -309,17 +203,54 @@ class _IssueTranslator:
 
             if status:
                 raw_fields["status"] = {"name": status}
+            fields.pop("is_open", None)
 
-        if self._config.jira.github_repository_field and "github_repository" in fields:
-            raw_fields[self._config.jira.github_repository_field] = fields["github_repository"]
-
-        if self._config.jira.github_issue_id_field and "github_issue_id" in fields:
-            raw_fields[self._config.jira.github_issue_id_field] = fields["github_issue_id"]
-
+        raw_fields.update(fields)
         return raw_fields
 
     def _make_name_list(self, values):
         return [{"name": v} for v in values]
+
+    def _get_metadata(self, raw_issue):
+        kwargs = {}
+
+        github_issue_url = getattr(raw_issue.fields, self._config.jira.github_issue_url_field_id)
+        if github_issue_url:
+            github_repository, github_issue_id = utils.extract_github_ids_from_url(github_issue_url)
+            kwargs["github_repository"] = github_repository
+            kwargs["github_issue_id"] = github_issue_id
+
+        metadata_json = getattr(raw_issue.fields, self._config.jira.jirahub_metadata_field_id)
+        if metadata_json:
+            metadata_dict = json.loads(metadata_json)
+            kwargs.update(metadata_dict)
+
+        if kwargs.get("comments"):
+            kwargs["comments"] = [CommentMetadata(**c) for c in kwargs["comments"]]
+
+        return Metadata(**kwargs)
+
+    def _get_raw_metadata_fields(self, metadata):
+        raw_fields = {}
+
+        if not metadata:
+            return {
+                self._config.jira.github_issue_url_field_id: None,
+                self._config.jira.jirahub_metadata_field_id: None,
+            }
+
+        if metadata.github_repository and metadata.github_issue_id:
+            github_issue_url = utils.make_github_issue_url(metadata.github_repository, metadata.github_issue_id)
+        else:
+            github_issue_url = None
+        raw_fields[self._config.jira.github_issue_url_field_id] = github_issue_url
+
+        metadata_dict = dataclasses.asdict(metadata)
+        metadata_dict.pop("github_repository")
+        metadata_dict.pop("github_issue_id")
+        raw_fields[self._config.jira.jirahub_metadata_field_id] = json.dumps(metadata_dict)
+
+        return raw_fields
 
 
 class Client:
@@ -336,16 +267,16 @@ class Client:
     def __init__(self, config, jira, bot_username):
         self._config = config
         self._jira = jira
-        self._translator = _IssueTranslator(config, bot_username)
+        self._mapper = _IssueMapper(config, bot_username)
 
     def get_user(self, username):
-        return self._translator.get_user(self._jira.user(username))
+        return self._mapper.get_user(self._jira.user(username))
 
     def find_issues(self, min_updated_at=None):
         if min_updated_at:
             assert min_updated_at.tzinfo is not None
 
-        query = self._make_query(min_updated_at)
+        query = self._make_query(min_updated_at=min_updated_at)
 
         current_page = 0
         while True:
@@ -358,22 +289,39 @@ class Client:
                 # issues one by one seems to fix that.
                 raw_issue = self._jira.issue(raw_issue.key)
                 raw_comments = self._jira.comments(raw_issue)
-                yield self._translator.get_issue(raw_issue, raw_comments)
+                yield self._mapper.get_issue(raw_issue, raw_comments)
 
             if len(raw_issues) < Client._PAGE_SIZE:
                 break
 
             current_page += 1
 
+    def find_other_issue(self, github_issue):
+        assert github_issue.source == Source.GITHUB
+
+        github_issue_url = utils.make_github_issue_url(github_issue.project, github_issue.issue_id)
+        query = self._make_query(github_issue_url=github_issue_url)
+        raw_issues = list(self._jira.search_issues(query))
+
+        if len(raw_issues) > 1:
+            raise RuntimeError(f"{github_issue} has multiple linked Jira issues")
+        elif len(raw_issues) == 1:
+            # Reloading the issue to make sure we get the creator field (see note above).
+            raw_issue = self._jira.issue(raw_issues[0].key)
+            raw_comments = self._jira.comments(raw_issue)
+            return self._mapper.get_issue(raw_issue, raw_comments)
+        else:
+            return None
+
     def get_issue(self, issue_id):
         raw_issue = self._jira.issue(issue_id)
         raw_comments = self._jira.comments(raw_issue)
-        return self._translator.get_issue(raw_issue, raw_comments)
+        return self._mapper.get_issue(raw_issue, raw_comments)
 
     def create_issue(self, fields):
-        fields = self._translator.get_raw_issue_fields(fields)
+        fields = self._mapper.get_raw_issue_fields(fields)
         raw_issue = self._jira.create_issue(**fields, project=self._config.jira.project_key)
-        new_issue = self._translator.get_issue(raw_issue, [])
+        new_issue = self._mapper.get_issue(raw_issue, [])
 
         logger.info("Created issue %s", new_issue)
 
@@ -382,14 +330,14 @@ class Client:
     def update_issue(self, issue, fields):
         assert issue.source == Source.JIRA
 
-        if ("title" in fields or "body" in fields or "metadata" in fields) and not issue.is_bot:
-            raise ValueError("Cannot update title, body, or metadata of issue owned by another user")
+        if ("title" in fields or "body" in fields) and not issue.is_bot:
+            raise ValueError("Cannot update title or body of issue owned by another user")
 
-        raw_fields = self._translator.get_raw_issue_fields(fields, issue=issue)
-        issue.raw_issue.update(**raw_fields)
+        raw_fields = self._mapper.get_raw_issue_fields(fields, issue=issue)
+        issue.raw_issue.update(notify=self._config.jira.notify_watchers, **raw_fields)
 
         raw_comments = self._jira.comments(issue.raw_issue)
-        updated_issue = self._translator.get_issue(issue.raw_issue, raw_comments)
+        updated_issue = self._mapper.get_issue(issue.raw_issue, raw_comments)
 
         logger.info("Updated issue %s", updated_issue)
 
@@ -398,9 +346,9 @@ class Client:
     def create_comment(self, issue, fields):
         assert issue.source == Source.JIRA
 
-        fields = self._translator.get_raw_comment_fields(fields)
+        fields = self._mapper.get_raw_comment_fields(fields)
         raw_comment = self._jira.add_comment(issue=issue.issue_id, **fields)
-        new_comment = self._translator.get_comment(raw_comment)
+        new_comment = self._mapper.get_comment(raw_comment)
 
         logger.info("Created comment %s on issue %s", new_comment, issue)
 
@@ -412,9 +360,9 @@ class Client:
         if not comment.is_bot:
             raise ValueError("Cannot update comment owned by another user")
 
-        fields = self._translator.get_raw_comment_fields(fields, comment=comment)
+        fields = self._mapper.get_raw_comment_fields(fields, comment=comment)
         comment.raw_comment.update(**fields)
-        updated_comment = self._translator.get_comment(comment.raw_comment)
+        updated_comment = self._mapper.get_comment(comment.raw_comment)
 
         logger.info("Updated comment %s", updated_comment)
 
@@ -430,7 +378,7 @@ class Client:
 
         logger.info("Deleted comment %s", comment)
 
-    def _make_query(self, min_updated_at=None):
+    def _make_query(self, min_updated_at=None, github_issue_url=None):
         filters = []
 
         quoted_project_key = self._quote_query_string(self._config.jira.project_key)
@@ -439,6 +387,10 @@ class Client:
         if min_updated_at:
             min_updated_at_ms = int(min_updated_at.timestamp() * 1000)
             filters.append(f"updated > {min_updated_at_ms}")
+
+        if github_issue_url:
+            quoted_url = self._quote_query_string(github_issue_url)
+            filters.append(f"{self._config.jira.github_issue_url_field_id} = {quoted_url}")
 
         return " and ".join(filters) + " order by updated asc"
 
@@ -482,7 +434,7 @@ class Formatter:
     def format_body(self, body):
         regions = [(body, True)]
 
-        regions = isolate_regions(
+        regions = utils.isolate_regions(
             regions, Formatter.NOFORMAT_OPEN_RE, Formatter.NOFORMAT_CLOSE_RE, self._handle_noformat_content
         )
 

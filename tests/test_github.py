@@ -4,7 +4,7 @@ from typing import Generator
 from datetime import datetime, timedelta, timezone
 
 from jirahub import github
-from jirahub.entities import Source, User
+from jirahub.entities import Source, User, Metadata
 from jirahub.utils import UrlHelper
 
 from . import constants, mocks
@@ -12,44 +12,6 @@ from . import constants, mocks
 
 def test_get_token():
     assert github.get_token() == constants.TEST_GITHUB_TOKEN
-
-
-@pytest.mark.parametrize(
-    "encoder, decoder, prefix, suffix",
-    [
-        (
-            github._encode_issue_metadata,
-            github._decode_issue_metadata,
-            github._ISSUE_METADATA_PREFIX,
-            github._ISSUE_METADATA_SUFFIX,
-        ),
-        (
-            github._encode_comment_metadata,
-            github._decode_comment_metadata,
-            github._COMMENT_METADATA_PREFIX,
-            github._COMMENT_METADATA_SUFFIX,
-        ),
-    ],
-)
-def test_metadata(encoder, decoder, prefix, suffix):
-    metadata = {"bool_key": True, "string_key": "string value", "int_key": 14, "float_key": 3.14159, "null_key": None}
-
-    encoded_metadata = encoder(metadata)
-
-    assert type(encoded_metadata) == str
-    assert encoded_metadata.startswith(prefix)
-    assert encoded_metadata.endswith(suffix)
-
-    metadata_payload = encoded_metadata[len(prefix) : -len(suffix)]
-
-    assert not metadata_payload.startswith(">")
-    assert not metadata_payload.startswith("->")
-    assert "--" not in metadata_payload
-    assert not metadata_payload.endswith("-")
-
-    reconstituted_metadata = decoder(encoded_metadata)
-
-    assert reconstituted_metadata == metadata
 
 
 class TestClient:
@@ -123,6 +85,22 @@ class TestClient:
         result = list(client.find_issues(min_updated_at=now - timedelta(seconds=1)))
         assert len(result) == 1
 
+    def test_find_other_issue(self, client, mock_repo, create_issue):
+        jira_issue = create_issue(Source.JIRA)
+
+        assert client.find_other_issue(jira_issue) is None
+
+        raw_github_issue = mock_repo.create_issue(title="Test issue")
+        jira_issue = create_issue(
+            Source.JIRA,
+            metadata=Metadata(
+                github_repository=constants.TEST_GITHUB_REPOSITORY, github_issue_id=raw_github_issue.number
+            ),
+        )
+
+        result = client.find_other_issue(jira_issue)
+        assert result.issue_id == raw_github_issue.number
+
     def test_get_issue(self, client, mock_repo):
         raw_issue = mock_repo.create_issue(title="Test issue")
 
@@ -140,7 +118,6 @@ class TestClient:
                 "title": "Test issue",
                 "body": "This is an issue body.",
                 "labels": ["label1", "label2"],
-                "metadata": {"bool": True, "string": "I'm a string!", "int": 37},
                 "milestones": [mock_repo.milestones[0].title],
             }
         )
@@ -148,7 +125,6 @@ class TestClient:
         assert result.title == "Test issue"
         assert result.body == "This is an issue body."
         assert result.labels == {"label1", "label2"}
-        assert result.metadata == {"bool": True, "string": "I'm a string!", "int": 37}
         assert result.milestones == {mock_repo.milestones[0].title}
 
         assert len(mock_repo.issues) == 1
@@ -165,6 +141,13 @@ class TestClient:
         assert result.title == "Test issue"
         assert len(mock_repo.issues) == 1
         assert mock_repo.issues[0].title == "Test issue"
+
+    def test_create_issue_custom_field(self, client, mock_repo):
+        result = client.create_issue({"title": "Test issue", "assignee": "big.bird"})
+
+        assert result.title == "Test issue"
+        assert len(mock_repo.issues) == 1
+        assert mock_repo.issues[0].assignee == "big.bird"
 
     def test_create_issue_milestone_behavior(self, client, mock_repo):
         # Milestone that doesn't exist:
@@ -227,9 +210,6 @@ class TestClient:
         with pytest.raises(Exception):
             client.update_issue(issue, {"body": "nope"})
 
-        with pytest.raises(Exception):
-            client.update_issue(issue, {"metadata": {"string": "nope"}})
-
     def test_update_issue_wrong_source(self, client, create_issue):
         jira_issue = create_issue(Source.JIRA)
 
@@ -241,7 +221,6 @@ class TestClient:
             {
                 "title": "Original title",
                 "body": "Original body",
-                "metadata": {"string": "Original metadata string", "bool": True, "int": 37},
                 "milestones": [mock_repo.milestones[0].title],
                 "labels": ["originallabel1", "originallabel2"],
             }
@@ -254,7 +233,6 @@ class TestClient:
         assert issue.source == Source.GITHUB
         assert issue.title == "Original title"
         assert issue.body == "Original body"
-        assert issue.metadata == {"string": "Original metadata string", "bool": True, "int": 37}
         assert issue.milestones == {mock_repo.milestones[0].title}
         assert issue.labels == {"originallabel1", "originallabel2"}
         assert issue.is_bot is True
@@ -274,7 +252,6 @@ class TestClient:
             {
                 "title": "Updated title",
                 "body": "Updated body",
-                "metadata": {"string": "Updated metadata string", "bool": False, "int": 84},
                 "milestones": [mock_repo.milestones[1].title],
                 "labels": ["updatedlabel1", "updatedlabel2"],
                 "is_open": False,
@@ -285,7 +262,6 @@ class TestClient:
 
         assert issue.title == "Updated title"
         assert issue.body == "Updated body"
-        assert issue.metadata == {"string": "Updated metadata string", "bool": False, "int": 84}
         assert issue.milestones == {mock_repo.milestones[1].title}
         assert issue.labels == {"updatedlabel1", "updatedlabel2"}
         assert issue.is_open is False
@@ -296,39 +272,12 @@ class TestClient:
 
         assert issue.is_open is True
 
-        # Update body but not metadata
-        client.update_issue(issue, {"body": "Metadata should not change"})
-
-        issue = client.get_issue(issue_id)
-
-        assert issue.body == "Metadata should not change"
-        assert issue.metadata == {"string": "Updated metadata string", "bool": False, "int": 84}
-
-        # Update metadata but not body
-        client.update_issue(issue, {"metadata": {"string": "Body should not change"}})
-
-        issue = client.get_issue(issue_id)
-
-        assert issue.body == "Metadata should not change"
-        assert issue.metadata == {"string": "Body should not change"}
-
-        client.update_issue(issue, {"body": None, "metadata": {}, "milestones": [], "labels": []})
+        client.update_issue(issue, {"body": None, "milestones": None, "labels": None})
 
         issue = client.get_issue(issue_id)
 
         assert issue.title == "Updated title"
         assert issue.body == ""
-        assert issue.metadata == {}
-        assert issue.milestones == set()
-        assert issue.labels == set()
-
-        client.update_issue(issue, {"body": None, "metadata": None, "milestones": None, "labels": None})
-
-        issue = client.get_issue(issue_id)
-
-        assert issue.title == "Updated title"
-        assert issue.body == ""
-        assert issue.metadata == {}
         assert issue.milestones == set()
         assert issue.labels == set()
 
@@ -349,26 +298,6 @@ class TestClient:
         assert len(issue.comments) == 3
         for i in range(3):
             assert issue.comments[i].body == f"This is comment #{i+1}"
-
-    def test_issue_with_tracking_comment(self, client, mock_repo):
-        raw_issue = mock_repo.create_issue(title="Test issue")
-        issue = client.get_issue(raw_issue.number)
-
-        client.create_comment(
-            issue,
-            {
-                "body": "This is a tracking comment body.",
-                "issue_metadata": {"bool": True, "string": "I'm a string!", "int": 37},
-            },
-        )
-
-        issue = client.get_issue(raw_issue.number)
-
-        assert len(issue.comments) == 1
-        assert issue.comments[0].metadata == {}
-        assert issue.comments[0].issue_metadata == {"bool": True, "string": "I'm a string!", "int": 37}
-        assert issue.comments[0].body == "This is a tracking comment body."
-        assert issue.metadata == {}
 
     def test_create_comment(self, client, mock_repo):
         issue = client.create_issue({"title": "Issue title"})
@@ -446,14 +375,7 @@ class TestClient:
 
     def test_comment_fields_round_trip(self, client):
         issue = client.create_issue({"title": "Issue title"})
-        comment = client.create_comment(
-            issue,
-            {
-                "body": "Original comment body",
-                "metadata": {"string": "Original metadata string", "bool": True, "int": 37},
-                "issue_metadata": {"string": "Original issue metadata string", "bool": False, "int": 22},
-            },
-        )
+        comment = client.create_comment(issue, {"body": "Original comment body"})
 
         issue_id = issue.issue_id
 
@@ -470,62 +392,12 @@ class TestClient:
         assert comment.user.username == constants.TEST_GITHUB_USER_LOGIN
         assert comment.user.display_name == constants.TEST_GITHUB_USER_NAME
         assert comment.body == "Original comment body"
-        assert comment.metadata == {"string": "Original metadata string", "bool": True, "int": 37}
-        assert comment.issue_metadata == {"string": "Original issue metadata string", "bool": False, "int": 22}
 
-        client.update_comment(
-            comment,
-            {
-                "body": "Updated comment body",
-                "metadata": {"string": "Updated metadata string", "bool": False, "int": 44},
-                "issue_metadata": {"string": "Updated issue metadata string", "bool": True, "int": 87},
-            },
-        )
+        client.update_comment(comment, {"body": "Updated comment body"})
 
         comment = client.get_issue(issue_id).comments[0]
 
         assert comment.body == "Updated comment body"
-        assert comment.metadata == {"string": "Updated metadata string", "bool": False, "int": 44}
-        assert comment.issue_metadata == {"string": "Updated issue metadata string", "bool": True, "int": 87}
-
-        # Update body but not either metadata
-        client.update_comment(comment, {"body": "Metadata should not change"})
-
-        comment = client.get_issue(issue_id).comments[0]
-
-        assert comment.body == "Metadata should not change"
-        assert comment.metadata == {"string": "Updated metadata string", "bool": False, "int": 44}
-        assert comment.issue_metadata == {"string": "Updated issue metadata string", "bool": True, "int": 87}
-
-        # Update metadata but not body or issue metadata
-        client.update_comment(comment, {"metadata": {"string": "Body and issue metadata should not change"}})
-
-        comment = client.get_issue(issue_id).comments[0]
-
-        assert comment.body == "Metadata should not change"
-        assert comment.metadata == {"string": "Body and issue metadata should not change"}
-        assert comment.issue_metadata == {"string": "Updated issue metadata string", "bool": True, "int": 87}
-
-        # Update issue metadata but not body or metadata
-        client.update_comment(comment, {"issue_metadata": {"string": "Body and metadata should not change"}})
-
-        comment = client.get_issue(issue_id).comments[0]
-
-        assert comment.body == "Metadata should not change"
-        assert comment.metadata == {"string": "Body and issue metadata should not change"}
-        assert comment.issue_metadata == {"string": "Body and metadata should not change"}
-
-        client.update_comment(comment, {"metadata": {}, "issue_metadata": {}})
-
-        comment = client.get_issue(issue_id).comments[0]
-
-        assert comment.metadata == {}
-        assert comment.issue_metadata == {}
-
-        client.update_comment(comment, {"metadata": None, "issue_metadata": None})
-
-        assert comment.metadata == {}
-        assert comment.issue_metadata == {}
 
     def test_is_issue(self, client, mock_repo):
         raw_issue = mock_repo.create_issue(title="Test issue")

@@ -1,8 +1,7 @@
 import pytest
 from datetime import datetime, timezone
-import random
 
-from jirahub.entities import User, Source, Comment, Issue
+from jirahub.entities import User, Source, Comment, Issue, Metadata
 from jirahub.config import JiraConfig, GithubConfig, JirahubConfig
 import jirahub.jira
 import jirahub.github
@@ -34,7 +33,12 @@ def reset_mocks():
 
 @pytest.fixture
 def jira_config():
-    return JiraConfig(server=constants.TEST_JIRA_SERVER, project_key=constants.TEST_JIRA_PROJECT_KEY)
+    return JiraConfig(
+        server=constants.TEST_JIRA_SERVER,
+        project_key=constants.TEST_JIRA_PROJECT_KEY,
+        github_issue_url_field_id="github_issue_url",
+        jirahub_metadata_field_id="jirahub_metadata",
+    )
 
 
 @pytest.fixture
@@ -110,8 +114,6 @@ def create_comment(create_user):
             "created_at": datetime.utcnow().replace(tzinfo=timezone.utc),
             "updated_at": datetime.utcnow().replace(tzinfo=timezone.utc),
             "body": f"Body of comment id {comment_id}.",
-            "metadata": {},
-            "issue_metadata": {},
             "raw_comment": None,
         }
 
@@ -133,61 +135,9 @@ def create_mirror_comment(create_comment, create_bot_user):
         kwargs["is_bot"] = True
         kwargs["user"] = create_bot_user(source)
 
-        if "metadata" in kwargs:
-            metadata = kwargs["metadata"].copy()
-        else:
-            metadata = {}
-
-        if source_comment:
-            metadata["mirror_id"] = source_comment.comment_id
-            metadata["body_hash"] = source_comment.body_hash
-        else:
-            metadata["mirror_id"] = mocks.next_comment_id()
-            metadata["body_hash"] = f"{random.getrandbits(128):032x}"
-
-        kwargs["metadata"] = metadata
-
         return create_comment(source, **kwargs)
 
     return _create_mirror_comment
-
-
-@pytest.fixture
-def create_tracking_comment(create_comment, create_bot_user):
-    def _create_tracking_comment(source, source_issue=None, **kwargs):
-        kwargs["is_bot"] = True
-        kwargs["user"] = create_bot_user(source)
-
-        if "metadata" in kwargs:
-            metadata = kwargs["metadata"].copy()
-        else:
-            metadata = {}
-
-        metadata["is_tracking_comment"] = True
-
-        kwargs["metadata"] = metadata
-
-        if "issue_metadata" in kwargs:
-            issue_metadata = kwargs["issue_metadata"].copy()
-        else:
-            issue_metadata = {}
-
-        if source_issue:
-            issue_metadata["mirror_id"] = source_issue.issue_id
-            issue_metadata["mirror_project"] = source_issue.project
-        else:
-            if source == Source.JIRA:
-                issue_metadata["mirror_id"] = mocks.next_github_issue_id()
-                issue_metadata["mirror_project"] = constants.TEST_JIRA_PROJECT_KEY
-            else:
-                issue_metadata["mirror_id"] = mocks.next_jira_issue_id()
-                issue_metadata["mirror_project"] = constants.TEST_GITHUB_REPOSITORY
-
-        kwargs["issue_metadata"] = issue_metadata
-
-        return create_comment(source, **kwargs)
-
-    return _create_tracking_comment
 
 
 @pytest.fixture
@@ -208,7 +158,6 @@ def create_issue(create_user, create_comment):
                 "labels": {"jiralabel1", "jiralabel2"},
                 "is_open": True,
                 "components": {"jiracomponent1", "jiracomponent2"},
-                "metadata": {},
                 "raw_issue": None,
                 "priority": "Major",
                 "issue_type": "Bug",
@@ -229,7 +178,6 @@ def create_issue(create_user, create_comment):
                 "labels": {"githublabel1", "githublabel2"},
                 "is_open": True,
                 "components": {},
-                "metadata": {},
                 "raw_issue": None,
                 "priority": None,
                 "issue_type": None,
@@ -255,28 +203,8 @@ def create_mirror_issue(create_issue, create_bot_user):
         kwargs["is_bot"] = True
         kwargs["user"] = create_bot_user(source)
 
-        if "metadata" in kwargs:
-            metadata = kwargs["metadata"].copy()
-        else:
-            metadata = {}
-
-        if source_issue:
-            metadata["mirror_id"] = source_issue.issue_id
-            metadata["mirror_project"] = source_issue.project
-            metadata["body_hash"] = source_issue.body_hash
-            metadata["title_hash"] = source_issue.title_hash
-        else:
-            if source == Source.JIRA:
-                metadata["mirror_id"] = mocks.next_github_issue_id()
-                metadata["mirror_project"] = constants.TEST_JIRA_PROJECT_KEY
-            else:
-                metadata["mirror_id"] = mocks.next_jira_issue_id()
-                metadata["mirror_project"] = constants.TEST_GITHUB_REPOSITORY
-
-            metadata["body_hash"] = f"{random.getrandbits(128):032x}"
-            metadata["title_hash"] = f"{random.getrandbits(128):032x}"
-
-        kwargs["metadata"] = metadata
+        if source == Source.JIRA and source_issue:
+            kwargs["metadata"] = Metadata(github_repository=source_issue.project, github_issue_id=source_issue.issue_id)
 
         return create_issue(source, **kwargs)
 

@@ -8,11 +8,11 @@ from . import mocks
 
 
 CONFIG_DIR = Path(__file__).parent / "configs"
-CONFIG_PATH = CONFIG_DIR / "full_config.ini"
-BASE_CONFIG_PATH = CONFIG_DIR / "fragment_config_base.ini"
-OVERRIDES_CONFIG_PATH = CONFIG_DIR / "fragment_config_overrides.ini"
-MISSING_CONFIG_PATH = CONFIG_DIR / "missing.ini"
-BAD_CONFIG_PATH = CONFIG_DIR / "bad_config.ini"
+CONFIG_PATH = CONFIG_DIR / "full_config.py"
+BASE_CONFIG_PATH = CONFIG_DIR / "fragment_config_base.py"
+OVERRIDES_CONFIG_PATH = CONFIG_DIR / "fragment_config_overrides.py"
+MISSING_CONFIG_PATH = CONFIG_DIR / "missing.py"
+BAD_CONFIG_PATH = CONFIG_DIR / "bad_config.py"
 
 
 def monkey_patch_args(monkeypatch, args):
