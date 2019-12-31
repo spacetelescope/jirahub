@@ -124,6 +124,15 @@ class TestClient:
 
         assert result.issue_id == raw_issue.key
 
+    def test_get_issue_bad_metadata(self, client, mock_jira):
+        raw_issue = mock_jira.create_issue(
+            project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue", jirahub_metadata="definitely not JSON"
+        )
+
+        result = client.get_issue(raw_issue.key)
+
+        assert result.metadata.comments == []
+
     def test_get_issue_missing(self, client):
         with pytest.raises(Exception):
             client.get_issue("TEST-123456")

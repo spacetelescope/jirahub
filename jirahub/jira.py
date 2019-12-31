@@ -222,8 +222,12 @@ class _IssueMapper:
 
         metadata_json = getattr(raw_issue.fields, self._config.jira.jirahub_metadata_field_id)
         if metadata_json:
-            metadata_dict = json.loads(metadata_json)
-            kwargs.update(metadata_dict)
+            try:
+                metadata_dict = json.loads(metadata_json)
+            except Exception:
+                logger.exception("Failed to deserialize JSON")
+            else:
+                kwargs.update(metadata_dict)
 
         if kwargs.get("comments"):
             kwargs["comments"] = [CommentMetadata(**c) for c in kwargs["comments"]]
