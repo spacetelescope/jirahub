@@ -233,22 +233,57 @@ class IssueSync:
         return one_updates, two_updates
 
     def sync_comments(self, issue_one, issue_two):
-        if not self.sync_feature_enabled(issue_one.source, SyncFeature.SYNC_COMMENTS) and not self.sync_feature_enabled(
-            issue_two.source, SyncFeature.SYNC_COMMENTS
-        ):
-            return
-
-        issue_one_comments = [(issue_one, c, issue_two) for c in issue_one.comments]
-        issue_two_comments = [(issue_two, c, issue_one) for c in issue_two.comments]
-        all_comments = issue_one_comments + issue_two_comments
-        comments_by_id = {(c.source, c.comment_id): c for _, c, _ in all_comments}
-
         if issue_one.source == Source.JIRA:
             jira_issue = issue_one
         else:
             jira_issue = issue_two
 
         rebuild_comment_metadata = False
+
+        tracking_comment_ids_by_source = {
+            Source.GITHUB: jira_issue.metadata.github_tracking_comment_id,
+            Source.JIRA: jira_issue.metadata.jira_tracking_comment_id,
+        }
+
+        for issue, other_issue in [(issue_one, issue_two), (issue_two, issue_one)]:
+            if self.get_source_config(issue.source).tracking_comment_enabled and not issue.is_bot:
+                tracking_comment_id = tracking_comment_ids_by_source[issue.source]
+                tracking_comment = next((c for c in issue.comments if c.comment_id == tracking_comment_id), None)
+
+                if tracking_comment is None:
+                    tracking_comment_fields = self.make_tracking_comment(other_issue)
+
+                    logger.info("Creating tracking comment on %s: %s", issue, tracking_comment_fields)
+
+                    if not self.dry_run:
+                        tracking_comment = self.get_client(issue.source).create_comment(issue, tracking_comment_fields)
+                        tracking_comment_ids_by_source[issue.source] = tracking_comment.comment_id
+                    else:
+                        logger.info("Skipping comment create due to dry run")
+
+                    rebuild_comment_metadata = True
+                else:
+                    expected_comment_body = self.make_tracking_comment_body(other_issue)
+                    if tracking_comment.body != expected_comment_body:
+                        tracking_comment_updates = {"body": expected_comment_body}
+
+                        logger.info("Updating %s on %s: %s", tracking_comment, issue, tracking_comment_updates)
+
+                        if not self.dry_run:
+                            self.get_client(issue.source).update_comment(tracking_comment, tracking_comment_updates)
+                        else:
+                            logger.info("Skipping comment update due to dry run")
+
+        tracking_comment_ids = set(tracking_comment_ids_by_source.values())
+        issue_one_comments = [
+            (issue_one, c, issue_two) for c in issue_one.comments if c.comment_id not in tracking_comment_ids
+        ]
+        issue_two_comments = [
+            (issue_two, c, issue_one) for c in issue_two.comments if c.comment_id not in tracking_comment_ids
+        ]
+        all_comments = issue_one_comments + issue_two_comments
+        comments_by_id = {(c.source, c.comment_id): c for _, c, _ in all_comments}
+
         comments_by_linked_id = {}
         for comment_metadata in jira_issue.metadata.comments:
             jira_comment = comments_by_id.get((Source.JIRA, comment_metadata.jira_comment_id))
@@ -321,6 +356,9 @@ class IssueSync:
 
             kwargs = dataclasses.asdict(jira_issue.metadata)
             kwargs["comments"] = new_comment_metadata_list
+            kwargs["jira_tracking_comment_id"] = tracking_comment_ids_by_source[Source.JIRA]
+            kwargs["github_tracking_comment_id"] = tracking_comment_ids_by_source[Source.GITHUB]
+
             new_metadata = Metadata(**kwargs)
 
             if not self.dry_run:
@@ -332,6 +370,13 @@ class IssueSync:
         fields = {}
 
         fields["body"] = self.make_mirror_comment_body(source_issue, source_comment)
+
+        return fields
+
+    def make_tracking_comment(self, source_issue):
+        fields = {}
+
+        fields["body"] = self.make_tracking_comment_body(source_issue)
 
         return fields
 
@@ -408,6 +453,20 @@ class IssueSync:
             comment_link = formatter.format_link(comment_url, str(source_issue.source))
 
             return f"_Comment by {user_link} on {comment_link}:_\r\n\r\n{body}"
+
+    def make_tracking_comment_body(self, source_issue):
+        mirror_source = source_issue.source.other
+        formatter = self.get_formatter(mirror_source)
+
+        if source_issue.source == Source.JIRA:
+            link_text = f"{source_issue.issue_id}"
+        else:
+            link_text = f"#{source_issue.issue_id}"
+
+        issue_url = self.url_helper.get_issue_url(source_issue)
+        issue_link = formatter.format_link(issue_url, link_text)
+
+        return f"_This issue is tracked on {source_issue.source} as {issue_link}._"
 
     def redact_text(self, source, text):
         for pattern in self.get_source_config(source).redact_patterns:

@@ -32,6 +32,8 @@ class CommentMetadata:
 class Metadata:
     github_repository: str = None
     github_issue_id: int = None
+    github_tracking_comment_id: int = None
+    jira_tracking_comment_id: int = None
     comments: List[CommentMetadata] = field(default_factory=list)
 
 

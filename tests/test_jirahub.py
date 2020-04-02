@@ -245,6 +245,38 @@ class TestIssueSync:
         assert_client_activity(github_client, comment_deletes=1)
         assert_client_activity(jira_client, issue_updates=1)
 
+    def test_perform_sync_tracking_comment(self, issue_sync, config, github_client, jira_client, create_issue):
+        config.github.tracking_comment_enabled = True
+        for source in Source:
+            enable_issue_filter(config, source)
+
+        jira_issue = create_issue(Source.JIRA)
+        jira_client.issues = [jira_issue]
+        issue_sync.perform_sync()
+        assert_client_activity(github_client, issue_creates=1)
+        assert_client_activity(jira_client, issue_updates=1)
+
+        github_issue = create_issue(Source.GITHUB)
+        github_client.issues.append(github_issue)
+        jira_client.reset_stats()
+        github_client.reset_stats()
+        issue_sync.perform_sync()
+        assert_client_activity(github_client, comment_creates=1)
+        assert_client_activity(jira_client, issue_creates=1, issue_updates=1)
+
+        jira_client.reset_stats()
+        github_client.reset_stats()
+        issue_sync.perform_sync()
+        assert_client_activity(github_client)
+        assert_client_activity(jira_client)
+
+        github_client.issues[-1].comments[0].__dict__["body"] = "foo"
+        jira_client.reset_stats()
+        github_client.reset_stats()
+        issue_sync.perform_sync()
+        assert_client_activity(github_client, comment_updates=1)
+        assert_client_activity(jira_client)
+
     def test_perform_sync_min_updated_at(self, issue_sync, config, github_client, jira_client, create_issue):
         for source in Source:
             enable_issue_filter(config, source)
@@ -275,6 +307,7 @@ class TestIssueSync:
     ):
         for source in Source:
             set_features(config, source, set(SyncFeature))
+            config.get_source_config(source).tracking_comment_enabled = True
 
         config.jira.issue_filter = lambda issue: "pickme" in issue.labels
         config.jira.issue_title_formatter = lambda issue, title: "Title from GitHub: " + title
@@ -296,8 +329,8 @@ class TestIssueSync:
         github_client.issues = [github_issue_excluded, github_issue]
 
         issue_sync.perform_sync()
-        assert_client_activity(jira_client, issue_creates=1, comment_creates=3, issue_updates=3)
-        assert_client_activity(github_client, issue_creates=1, comment_creates=3)
+        assert_client_activity(jira_client, issue_creates=1, comment_creates=4, issue_updates=3)
+        assert_client_activity(github_client, issue_creates=1, comment_creates=4)
         mirror_jira_issue = next(i for i in jira_client.issues if i.is_bot)
         assert mirror_jira_issue.title == "Title from GitHub: " + github_issue.title
         assert mirror_jira_issue.body == "Body from GitHub: " + github_issue.body
@@ -305,6 +338,8 @@ class TestIssueSync:
         assert mirror_jira_issue.milestones == {"8.5.2"}
         assert mirror_jira_issue.metadata.github_repository == constants.TEST_GITHUB_REPOSITORY
         assert mirror_jira_issue.metadata.github_issue_id == github_issue.issue_id
+        assert mirror_jira_issue.metadata.github_tracking_comment_id is not None
+        assert mirror_jira_issue.metadata.jira_tracking_comment_id is None
         assert mirror_jira_issue.is_bot is True
         assert mirror_jira_issue.is_open is True
         assert len(mirror_jira_issue.comments) == 3
@@ -316,6 +351,10 @@ class TestIssueSync:
         assert mirror_github_issue.is_bot is True
         assert mirror_github_issue.is_open is True
         assert len(mirror_github_issue.comments) == 3
+
+        jira_issue = jira_client.get_issue(jira_issue.issue_id)
+        assert jira_issue.metadata.github_tracking_comment_id is None
+        assert jira_issue.metadata.jira_tracking_comment_id is not None
 
         jira_client.reset_stats()
         github_client.reset_stats()
@@ -440,6 +479,7 @@ class TestIssueSync:
         for source in Source:
             set_features(config, source, set(SyncFeature))
             enable_issue_filter(config, source)
+            config.get_source_config(source).tracking_comment_enabled = True
 
         new_jira_issue = create_issue(Source.JIRA)
         existing_jira_issue = create_issue(Source.JIRA)

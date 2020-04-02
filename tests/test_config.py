@@ -28,6 +28,7 @@ def test_load_config_minimal():
     assert config.jira.sync_status is False
     assert config.jira.sync_labels is False
     assert config.jira.sync_milestones is False
+    assert config.jira.tracking_comment_enabled is False
     assert config.jira.redact_patterns == []
     assert config.jira.issue_title_formatter is None
     assert config.jira.issue_body_formatter is None
@@ -41,6 +42,7 @@ def test_load_config_minimal():
     assert config.github.sync_status is False
     assert config.github.sync_labels is False
     assert config.github.sync_milestones is False
+    assert config.github.tracking_comment_enabled is True
     assert config.github.redact_patterns == []
     assert config.github.issue_title_formatter is None
     assert config.github.issue_body_formatter is None
@@ -66,6 +68,7 @@ def test_load_config_full():
     assert config.jira.sync_status is True
     assert config.jira.sync_labels is True
     assert config.jira.sync_milestones is True
+    assert config.jira.tracking_comment_enabled is True
     assert config.jira.redact_patterns == [re.compile(r"(?<=secret GitHub data: ).+?\b")]
     assert callable(config.jira.issue_title_formatter)
     assert callable(config.jira.issue_body_formatter)
@@ -79,6 +82,7 @@ def test_load_config_full():
     assert config.github.sync_status is True
     assert config.github.sync_labels is True
     assert config.github.sync_milestones is True
+    assert config.github.tracking_comment_enabled is False
     assert config.github.redact_patterns == [re.compile(r"(?<=secret JIRA data: ).+?\b")]
     assert callable(config.github.issue_title_formatter)
     assert callable(config.github.issue_body_formatter)
