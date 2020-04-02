@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 class SyncFeature(Enum):
     SYNC_COMMENTS = ({"ADD_COMMENTS", "DELETE_OWN_COMMENTS", "EDIT_OWN_COMMENTS"}, False)
-    SYNC_STATUS = ({"CLOSE_ISSUES", "RESOLVE_ISSUES"}, True)
+    SYNC_STATUS = ({"CLOSE_ISSUES", "RESOLVE_ISSUES", "TRANSITION_ISSUES"}, True)
     SYNC_LABELS = ({"EDIT_ISSUES"}, True)
     SYNC_MILESTONES = ({"EDIT_ISSUES", "RESOLVE_ISSUES"}, True)
 
