@@ -49,10 +49,9 @@ c.jira.jirahub_metadata_field_id =
 # Copy milestone from GitHub to JIRA's fixVersions field
 #c.jira.sync_milestones = False
 
-# Create a comment on a linked Jira issue (not owned by the bot)
-# containing a link back to GitHub.  Disabled by default because
-# the GitHub issue URL is available as a Jira field.
-#c.jira.tracking_comment_enabled = False
+# Create a comment on a linked JIRA issue (not owned by the bot)
+# containing a link back to GitHub.
+#c.jira.create_tracking_comment = False
 
 # Regular expressions whose matches will be redacted from issue titles,
 # issue bodies, or comment bodies copied over from GitHub.
@@ -108,8 +107,8 @@ c.github.repository =
 #c.github.sync_milestones = False
 
 # Create a comment on a linked GitHub issue (not owned by the bot)
-# containing a link back to Jira.
-#c.github.tracking_comment_enabled = True
+# containing a link back to JIRA.
+#c.github.create_tracking_comment = False
 
 # Regular expressions whose matches will be redacted from issue titles,
 # issue bodies, or comment bodies copied over from JIRA.

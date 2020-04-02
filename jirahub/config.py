@@ -51,7 +51,7 @@ class JiraConfig:
     sync_status: bool = False
     sync_labels: bool = False
     sync_milestones: bool = False
-    tracking_comment_enabled: bool = False
+    create_tracking_comment: bool = False
     redact_patterns: List[re.Pattern] = field(default_factory=list)
     issue_title_formatter: Callable[[Issue, str], str] = None
     issue_body_formatter: Callable[[Issue, str], str] = None
@@ -68,7 +68,7 @@ class GithubConfig:
     sync_status: bool = False
     sync_labels: bool = False
     sync_milestones: bool = False
-    tracking_comment_enabled: bool = True
+    create_tracking_comment: bool = False
     redact_patterns: List[re.Pattern] = field(default_factory=list)
     issue_title_formatter: Callable[[Issue, str], str] = None
     issue_body_formatter: Callable[[Issue, str], str] = None

@@ -246,7 +246,7 @@ class IssueSync:
         }
 
         for issue, other_issue in [(issue_one, issue_two), (issue_two, issue_one)]:
-            if self.get_source_config(issue.source).tracking_comment_enabled and not issue.is_bot:
+            if self.get_source_config(issue.source).create_tracking_comment and not issue.is_bot:
                 tracking_comment_id = tracking_comment_ids_by_source[issue.source]
                 tracking_comment = next((c for c in issue.comments if c.comment_id == tracking_comment_id), None)
 

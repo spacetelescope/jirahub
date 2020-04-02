@@ -98,6 +98,8 @@ These are parameters particular to JIRA.  The ``server`` and ``project_key`` att
      - Set to ``True`` if the JIRA issue's labels should match GitHub's labels
    * - c.jira.sync_milestones
      - Set to ``True`` if the JIRA issue's fixVersions field should match GitHub's milestone
+   * - c.jira.create_tracking_comment
+     - Set to ``True`` to create a comment on JIRA issues that links back to GitHub.
    * - c.jira.redact_patterns
      - List of ``re.Pattern`` whose matches will be redacted from issue titles,
        issue bodies, and comment bodies copied over from GitHub
@@ -141,6 +143,8 @@ These are parameters particular to GitHub.  The ``repository`` parameter is requ
      - Set to ``True`` if the GitHub issue's labels should match JIRA's labels
    * - c.github.sync_milestones
      - Set to ``True`` if the GitHub issue's fixVersions field should match JIRA's milestone
+   * - c.jira.create_tracking_comment
+     - Set to ``True`` to create a comment on GitHub issues that links back to JIRA.
    * - c.github.redact_patterns
      - List of ``re.Pattern`` whose matches will be redacted from issue titles,
        issue bodies, and comment bodies copied over from JIRA

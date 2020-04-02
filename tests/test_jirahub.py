@@ -246,7 +246,7 @@ class TestIssueSync:
         assert_client_activity(jira_client, issue_updates=1)
 
     def test_perform_sync_tracking_comment(self, issue_sync, config, github_client, jira_client, create_issue):
-        config.github.tracking_comment_enabled = True
+        config.github.create_tracking_comment = True
         for source in Source:
             enable_issue_filter(config, source)
 
@@ -307,7 +307,7 @@ class TestIssueSync:
     ):
         for source in Source:
             set_features(config, source, set(SyncFeature))
-            config.get_source_config(source).tracking_comment_enabled = True
+            config.get_source_config(source).create_tracking_comment = True
 
         config.jira.issue_filter = lambda issue: "pickme" in issue.labels
         config.jira.issue_title_formatter = lambda issue, title: "Title from GitHub: " + title
@@ -479,7 +479,7 @@ class TestIssueSync:
         for source in Source:
             set_features(config, source, set(SyncFeature))
             enable_issue_filter(config, source)
-            config.get_source_config(source).tracking_comment_enabled = True
+            config.get_source_config(source).create_tracking_comment = True
 
         new_jira_issue = create_issue(Source.JIRA)
         existing_jira_issue = create_issue(Source.JIRA)

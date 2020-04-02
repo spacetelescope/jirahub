@@ -308,7 +308,7 @@ class Client:
         raw_issues = list(self._jira.search_issues(query))
 
         if len(raw_issues) > 1:
-            raise RuntimeError(f"{github_issue} has multiple linked Jira issues")
+            raise RuntimeError(f"{github_issue} has multiple linked JIRA issues")
         elif len(raw_issues) == 1:
             # Reloading the issue to make sure we get the creator field (see note above).
             raw_issue = self._jira.issue(raw_issues[0].key)

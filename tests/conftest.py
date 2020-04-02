@@ -43,7 +43,7 @@ def jira_config():
 
 @pytest.fixture
 def github_config():
-    return GithubConfig(repository=constants.TEST_GITHUB_REPOSITORY, tracking_comment_enabled=False,)
+    return GithubConfig(repository=constants.TEST_GITHUB_REPOSITORY)
 
 
 @pytest.fixture()
