@@ -4,10 +4,12 @@ from argparse import ArgumentParser
 import traceback
 import logging
 from datetime import datetime, timezone
+import json
 
 from .config import load_config, generate_config_template
 from .permissions import check_permissions
 from .jirahub import IssueSync
+from .entities import Source
 
 
 logger = logging.getLogger(__name__)
@@ -32,7 +34,7 @@ def _parse_args():
         "1983-11-20T11:00:00"
     )
     placeholder_group.add_argument("--min-updated-at", help=min_updated_at_help)
-    placeholder_group.add_argument("--placeholder-path", help="path to placeholder file")
+    placeholder_group.add_argument("--state-path", help="path to JSON file containing state from previous run")
 
     sync_parser.add_argument("--dry-run", action="store_true", help="query but do not make changes to GitHub or JIRA")
 
@@ -89,13 +91,17 @@ def _handle_sync(args):
 
     if args.min_updated_at:
         min_updated_at = datetime.fromisoformat(args.min_updated_at).replace(tzinfo=timezone.utc)
-    elif args.placeholder_path:
-        min_updated_at = _read_placeholder(args.placeholder_path)
+        retry_issues = []
+    elif args.state_path:
+        min_updated_at, retry_issues = _read_state(args.state_path)
     else:
         min_updated_at = None
+        retry_issues = []
 
     if min_updated_at:
         logger.info("Starting placeholder: %s", _format_placeholder(min_updated_at))
+        if len(retry_issues) > 0:
+            logger.info("Will retry %s previous failed issues", len(retry_issues))
     else:
         logger.warning("Missing placeholder.  Will sync issues from all time.")
 
@@ -103,14 +109,17 @@ def _handle_sync(args):
 
     try:
         issue_sync = IssueSync.from_config(config, dry_run=args.dry_run)
-        issue_sync.perform_sync(min_updated_at)
+        failed_issues = issue_sync.perform_sync(min_updated_at, retry_issues=retry_issues)
     except Exception:
         logger.exception("Fatal error")
         return 1
 
-    logger.info("Sync successful.  Next placeholder: %s", _format_placeholder(new_min_updated_at))
-    if args.placeholder_path and not args.dry_run:
-        _write_placeholder(args.placeholder_path, new_min_updated_at)
+    if len(failed_issues) > 0:
+        logger.error("%s issues were selected to sync, but failed", len(failed_issues))
+
+    logger.info("Next placeholder: %s", _format_placeholder(new_min_updated_at))
+    if args.state_path and not args.dry_run:
+        _write_state(args.state_path, new_min_updated_at, failed_issues)
 
     return 0
 
@@ -149,21 +158,37 @@ def _print_error(*args, **kwargs):
     print(*args, **kwargs, file=sys.stderr)
 
 
-def _read_placeholder(path):
+def _read_state(path):
     if os.path.isfile(path):
         with open(path, "r") as file:
-            value = file.read()
-        min_updated_at = datetime.fromisoformat(value.strip())
-        return min_updated_at.replace(tzinfo=timezone.utc)
+            content = file.read()
+
+        state = json.loads(content)
+
+        if state.get("min_updated_at"):
+            min_updated_at = datetime.fromisoformat(state["min_updated_at"]).replace(tzinfo=timezone.utc)
+        else:
+            min_updated_at = None
+
+        if state.get("retry_issues"):
+            retry_issues = [(Source[i["source"].upper()], i["issue_id"]) for i in state["retry_issues"]]
+        else:
+            retry_issues = []
+
+        return min_updated_at, retry_issues
     else:
-        logger.warning("Placeholder file missing")
-        return None
+        logger.warning("State file missing")
+        return None, []
 
 
-def _write_placeholder(path, min_updated_at):
+def _write_state(path, min_updated_at, failed_issues):
+    state = {
+        "min_updated_at": _format_placeholder(min_updated_at),
+        "retry_issues": [{"source": source.name, "issue_id": issue_id} for source, issue_id in failed_issues],
+    }
+
     with open(path, "w") as file:
-        file.write(_format_placeholder(min_updated_at))
-        file.write("\n")
+        file.write(json.dumps(state))
 
 
 def _format_placeholder(value):

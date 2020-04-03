@@ -64,17 +64,22 @@ class IssueSync:
     def sync_feature_enabled(self, source, sync_feature):
         return self._config.is_enabled(source, sync_feature)
 
-    def find_updated_issues(self, min_updated_at=None):
+    def find_issues(self, min_updated_at=None, retry_issues=None):
         yield from self.get_client(Source.JIRA).find_issues(min_updated_at)
         yield from self.get_client(Source.GITHUB).find_issues(min_updated_at)
 
-    def perform_sync(self, min_updated_at=None):
+        if retry_issues is not None:
+            for source, issue_id in retry_issues:
+                yield self.get_client(source).get_issue(issue_id)
+
+    def perform_sync(self, min_updated_at=None, retry_issues=None):
         if min_updated_at:
             assert min_updated_at.tzinfo is not None
 
         seen = set()
+        failed = set()
 
-        for updated_issue in self.find_updated_issues(min_updated_at):
+        for updated_issue in self.find_issues(min_updated_at, retry_issues=retry_issues):
             if (updated_issue.source, updated_issue.issue_id) in seen:
                 continue
 
@@ -82,10 +87,13 @@ class IssueSync:
                 other_issue = self._perform_sync_issue(updated_issue)
             except Exception:
                 logger.exception("Failed syncing %s", updated_issue)
+                failed.add((updated_issue.source, updated_issue.issue_id))
             else:
                 seen.add((updated_issue.source, updated_issue.issue_id))
                 if other_issue:
                     seen.add((other_issue.source, other_issue.issue_id))
+
+        return failed
 
     def _perform_sync_issue(self, updated_issue):
         other_source = updated_issue.source.other

@@ -133,11 +133,17 @@ class TestIssueSync:
         jira_client.issues = jira_issues
         github_client.issues = github_issues
 
-        result = issue_sync.find_updated_issues()
+        result = issue_sync.find_issues()
         assert {id(i) for i in result} == {id(i) for i in jira_issues + github_issues}
 
-        result = issue_sync.find_updated_issues(mocks.now() - timedelta(hours=3))
+        result = issue_sync.find_issues(mocks.now() - timedelta(hours=3))
         assert {id(i) for i in result} == {id(i) for i in jira_issues[:3] + github_issues[:3]}
+
+        retry_issues = [(Source.JIRA, jira_issues[-1].issue_id), (Source.GITHUB, github_issues[-1].issue_id)]
+        result = issue_sync.find_issues(mocks.now() - timedelta(hours=3), retry_issues=retry_issues)
+        assert {id(i) for i in result} == {
+            id(i) for i in jira_issues[:3] + github_issues[:3] + [jira_issues[-1], github_issues[-1]]
+        }
 
     def test_perform_sync_no_features(self, issue_sync, config, github_client, jira_client, create_issue):
         jira_client.issues = [create_issue(Source.JIRA) for _ in range(5)]
@@ -538,10 +544,14 @@ class TestIssueSync:
         config.jira.issue_body_formatter = exceptional_formatter
         config.github.issue_body_formatter = exceptional_formatter
 
-        issue_sync.perform_sync()
+        failed_issues = issue_sync.perform_sync()
 
         assert_client_activity(jira_client, issue_creates=1, issue_updates=1)
         assert_client_activity(github_client, issue_creates=1)
+
+        assert len(failed_issues) == 2
+        assert (Source.JIRA, bogus_jira_issue.issue_id) in failed_issues
+        assert (Source.GITHUB, bogus_github_issue.issue_id) in failed_issues
 
     def test_perform_sync_missing_issue(self, issue_sync, config, github_client, jira_client, create_issue):
         # Confirm that a deleted source issue doesn't impact unrelated issues
