@@ -101,7 +101,7 @@ def _handle_sync(args):
     if min_updated_at:
         logger.info("Starting placeholder: %s", _format_placeholder(min_updated_at))
         if len(retry_issues) > 0:
-            logger.info("Will retry %s previous failed issues", len(retry_issues))
+            logger.info("Will retry %s previously failed issues", len(retry_issues))
     else:
         logger.warning("Missing placeholder.  Will sync issues from all time.")
 
