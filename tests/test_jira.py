@@ -107,19 +107,6 @@ class TestClient:
         result = client.find_other_issue(github_issue)
         assert result.issue_id == raw_jira_issue.key
 
-        # JIRA doesn't support exact matches on text fields in JQL queries,
-        # so we're forced to use the "contains" operator.  Confirm that we're
-        # handling multiple "contains" matches correctly.
-        mock_jira.create_issue(
-            project=constants.TEST_JIRA_PROJECT_KEY,
-            summary="Test issue",
-            customfield_12345=f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}0",
-        )
-        result = client.find_other_issue(github_issue)
-        assert result.issue_id == raw_jira_issue.key
-
-        # If multiple JIRA issues are linked to the same GitHub issue,
-        # that's a condition we can't handle.
         mock_jira.create_issue(
             project=constants.TEST_JIRA_PROJECT_KEY,
             summary="Test issue",

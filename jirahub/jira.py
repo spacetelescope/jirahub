@@ -318,7 +318,7 @@ class Client:
         github_issue_url = utils.make_github_issue_url(github_issue.project, github_issue.issue_id)
         query = self._make_query(github_issue_url=github_issue_url)
         field_name = _client_field_name(self._config.jira.github_issue_url_field_id)
-        raw_issues = [i for i in self._jira.search_issues(query) if getattr(i.fields, field_name) == github_issue_url]
+        raw_issues = self._jira.search_issues(query)
 
         if len(raw_issues) > 1:
             raise RuntimeError(f"{github_issue} has multiple linked JIRA issues")
@@ -408,7 +408,7 @@ class Client:
         if github_issue_url:
             quoted_url = self._quote_query_string(github_issue_url)
             field_name = _jql_field_name(self._config.jira.github_issue_url_field_id)
-            filters.append(f"{field_name} ~ {quoted_url}")
+            filters.append(f"{field_name} = {quoted_url}")
 
         return " and ".join(filters) + " order by updated asc"
 
