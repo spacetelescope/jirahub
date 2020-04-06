@@ -6,15 +6,12 @@ c.jira.server =
 # JIRA project key (required)
 c.jira.project_key =
 
-# ID of the JIRA custom field that stores the GitHub URL of a linked issue.
-# Note that the ID is not the same as the field's display name; it will
-# look something like "customfield_#####".
+# Integer ID of the JIRA custom field that stores the GitHub URL of a
+# linked issue.
 # (required)
 c.jira.github_issue_url_field_id =
 
-# ID of the JIRA custom field that stores jirahub metadata.  Note that
-# the ID is not the same as the field's display name; it will look something
-# like "customfield_#####".
+# Integer ID of the JIRA custom field that stores jirahub metadata.
 # (required)
 c.jira.jirahub_metadata_field_id =
 

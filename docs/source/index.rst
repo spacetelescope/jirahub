@@ -72,10 +72,10 @@ These are parameters particular to JIRA.  The ``server`` and ``project_key`` att
    * - c.jira.project_key
      - The project key of the JIRA project that will be synced
    * - c.jira.github_issue_url_field_id
-     - The ID of a JIRA custom field in which jirahub will write the URL of the
+     - The integer ID of a JIRA custom field in which jirahub will write the URL of the
        linked GitHub issue.
    * - c.jira.jirahub_metadata_field_id
-     - The ID of a JIRA custom field in which jirahub will write metadata such as
+     - The integer ID of a JIRA custom field in which jirahub will write metadata such as
        the ids of linked comments.
    * - c.jira.closed_statuses
      - List of JIRA statuses that will be considered closed.  All others will be treated as

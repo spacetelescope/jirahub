@@ -39,8 +39,8 @@ class SyncFeature(Enum):
 class JiraConfig:
     server: str = None
     project_key: str = None
-    github_issue_url_field_id: str = None
-    jirahub_metadata_field_id: str = None
+    github_issue_url_field_id: int = None
+    jirahub_metadata_field_id: int = None
     closed_statuses: List[str] = field(default_factory=lambda: ["closed"])
     close_status: str = "Closed"
     reopen_status: str = "Reopened"

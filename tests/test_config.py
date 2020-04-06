@@ -16,8 +16,8 @@ def test_load_config_minimal():
 
     assert config.jira.server == "https://test.jira.server"
     assert config.jira.project_key == "TEST"
-    assert config.jira.github_issue_url_field_id == "github_issue_url"
-    assert config.jira.jirahub_metadata_field_id == "jirahub_metadata"
+    assert config.jira.github_issue_url_field_id == 12345
+    assert config.jira.jirahub_metadata_field_id == 67890
     assert config.jira.closed_statuses == ["closed"]
     assert config.jira.close_status == "Closed"
     assert config.jira.reopen_status == "Reopened"
@@ -56,8 +56,8 @@ def test_load_config_full():
 
     assert config.jira.server == "https://test.jira.server"
     assert config.jira.project_key == "TEST"
-    assert config.jira.github_issue_url_field_id == "custom_github_issue_url"
-    assert config.jira.jirahub_metadata_field_id == "custom_jirahub_metadata"
+    assert config.jira.github_issue_url_field_id == 12345
+    assert config.jira.jirahub_metadata_field_id == 67890
     assert config.jira.closed_statuses == ["Closed", "Done"]
     assert config.jira.close_status == "Done"
     assert config.jira.reopen_status == "Ready"

@@ -102,18 +102,29 @@ class TestClient:
         raw_jira_issue = mock_jira.create_issue(
             project=constants.TEST_JIRA_PROJECT_KEY,
             summary="Test issue",
-            github_issue_url=f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}",
+            customfield_12345=f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}",
         )
-
         result = client.find_other_issue(github_issue)
         assert result.issue_id == raw_jira_issue.key
 
+        # JIRA doesn't support exact matches on text fields in JQL queries,
+        # so we're forced to use the "contains" operator.  Confirm that we're
+        # handling multiple "contains" matches correctly.
         mock_jira.create_issue(
             project=constants.TEST_JIRA_PROJECT_KEY,
             summary="Test issue",
-            github_issue_url=f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}",
+            customfield_12345=f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}0",
         )
+        result = client.find_other_issue(github_issue)
+        assert result.issue_id == raw_jira_issue.key
 
+        # If multiple JIRA issues are linked to the same GitHub issue,
+        # that's a condition we can't handle.
+        mock_jira.create_issue(
+            project=constants.TEST_JIRA_PROJECT_KEY,
+            summary="Test issue",
+            customfield_12345=f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}",
+        )
         with pytest.raises(RuntimeError):
             client.find_other_issue(github_issue)
 
@@ -126,7 +137,7 @@ class TestClient:
 
     def test_get_issue_bad_metadata(self, client, mock_jira):
         raw_issue = mock_jira.create_issue(
-            project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue", jirahub_metadata="definitely not JSON"
+            project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue", customfield_67890="definitely not JSON"
         )
 
         result = client.get_issue(raw_issue.key)
@@ -180,9 +191,9 @@ class TestClient:
         assert raw_issue.fields.priority.name == "Critical"
         assert raw_issue.fields.issuetype.name == "Task"
         assert raw_issue.fields.status.name == constants.TEST_JIRA_DEFAULT_STATUS
-        assert raw_issue.fields.github_issue_url == "https://github.com/testing/test-repo/issues/451"
+        assert raw_issue.fields.customfield_12345 == "https://github.com/testing/test-repo/issues/451"
 
-        metadata_json = raw_issue.fields.jirahub_metadata
+        metadata_json = raw_issue.fields.customfield_67890
         metadata = json.loads(metadata_json)
         assert len(metadata["comments"]) == 1
         assert metadata["comments"][0]["jira_comment_id"] == 18

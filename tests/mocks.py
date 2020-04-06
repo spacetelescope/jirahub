@@ -172,8 +172,8 @@ class MockJIRAIssueFields:
     )
     created: str = field(default_factory=_jira_now)
     updated: str = field(default_factory=_jira_now)
-    github_issue_url: str = None
-    jirahub_metadata: str = None
+    customfield_12345: str = None
+    customfield_67890: str = None
     project: MockJIRAProject = field(default_factory=lambda: MockJIRAProject())
     custom_field: str = None
 
@@ -322,7 +322,7 @@ class MockJIRA:
             issues = [i for i in self.issues if i.fields.updated >= min_updated]
         elif issue_url_match:
             github_issue_url = issue_url_match.group(1)
-            issues = [i for i in self.issues if i.fields.github_issue_url == github_issue_url]
+            issues = [i for i in self.issues if github_issue_url in i.fields.github_issue_url]
         else:
             issues = self.issues
 
