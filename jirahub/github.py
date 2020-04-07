@@ -204,10 +204,10 @@ class Client:
 
         if min_updated_at:
             raw_issues = self._repo.get_issues(
-                sort="updated", direction="asc", since=min_updated_at.astimezone(timezone.utc)
+                sort="updated", direction="asc", since=min_updated_at.astimezone(timezone.utc), state="all"
             )
         else:
-            raw_issues = self._repo.get_issues(sort="updated", direction="asc")
+            raw_issues = self._repo.get_issues(sort="updated", direction="asc", state="all")
 
         # Already paginated by GitHub's client:
         for raw_issue in raw_issues:

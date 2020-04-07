@@ -477,7 +477,9 @@ class MockGithubRepository:
     def get_milestones(self):
         return self.milestones
 
-    def get_issues(self, sort=None, direction=None, since=None):
+    def get_issues(self, sort=None, direction=None, since=None, state=None):
+        assert state == "all"
+
         for issue in self.issues:
             if since is None or issue.updated_at >= since.replace(tzinfo=None):
                 yield issue
