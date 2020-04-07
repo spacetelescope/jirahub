@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import logging
 import os
 import dataclasses
+import urllib
 
 from jira import JIRA
 
@@ -109,7 +110,7 @@ class _IssueMapper:
         created_at = _parse_datetime(raw_issue.fields.created)
         updated_at = _parse_datetime(raw_issue.fields.updated)
         title = raw_issue.fields.summary
-        labels = set(raw_issue.fields.labels)
+        labels = set([urllib.parse.unquote(l) for l in raw_issue.fields.labels])
         milestones = {v.name for v in raw_issue.fields.fixVersions}
         components = {c.name for c in raw_issue.fields.components}
 
@@ -168,7 +169,7 @@ class _IssueMapper:
 
         if "labels" in fields:
             if fields["labels"]:
-                raw_fields["labels"] = list(fields["labels"])
+                raw_fields["labels"] = [urllib.parse.quote(l) for l in fields["labels"]]
             else:
                 raw_fields["labels"] = []
             fields.pop("labels")
