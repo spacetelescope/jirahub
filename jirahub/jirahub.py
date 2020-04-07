@@ -55,6 +55,9 @@ class IssueSync:
             return self._config.github.repository
 
     def accept_issue(self, source, issue):
+        if issue.is_bot:
+            return False
+
         issue_filter = self._config.get_source_config(source).issue_filter
         if issue_filter:
             return issue_filter(issue)

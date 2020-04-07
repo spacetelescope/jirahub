@@ -197,24 +197,26 @@ class _IssueMapper:
         if "issue_type" in fields:
             raw_fields["issuetype"] = {"name": fields.pop("issue_type")}
 
-        if "is_open" in fields or issue is None:
+        transition = None
+        if issue is None:
             if "is_open" in fields:
                 if fields["is_open"]:
-                    if issue is None:
-                        status = self._config.jira.open_status
-                    else:
-                        status = self._config.jira.reopen_status
+                    status = self._config.jira.open_status
                 else:
                     status = self._config.jira.close_status
             else:
                 status = self._config.jira.open_status
-
             if status:
                 raw_fields["status"] = {"name": status}
-            fields.pop("is_open", None)
+        elif "is_open" in fields:
+            if fields["is_open"]:
+                transition = self._config.jira.reopen_status
+            else:
+                transition = self._config.jira.close_status
+        fields.pop("is_open", None)
 
         raw_fields.update(fields)
-        return raw_fields
+        return raw_fields, transition
 
     def _make_name_list(self, values):
         return [{"name": v} for v in values]
@@ -317,7 +319,6 @@ class Client:
 
         github_issue_url = utils.make_github_issue_url(github_issue.project, github_issue.issue_id)
         query = self._make_query(github_issue_url=github_issue_url)
-        field_name = _client_field_name(self._config.jira.github_issue_url_field_id)
         raw_issues = self._jira.search_issues(query)
 
         if len(raw_issues) > 1:
@@ -336,8 +337,8 @@ class Client:
         return self._mapper.get_issue(raw_issue, raw_comments)
 
     def create_issue(self, fields):
-        fields = self._mapper.get_raw_issue_fields(fields)
-        raw_issue = self._jira.create_issue(**fields, project=self._config.jira.project_key)
+        raw_fields, _ = self._mapper.get_raw_issue_fields(fields)
+        raw_issue = self._jira.create_issue(**raw_fields, project=self._config.jira.project_key)
         new_issue = self._mapper.get_issue(raw_issue, [])
 
         logger.info("Created issue %s", new_issue)
@@ -350,8 +351,11 @@ class Client:
         if ("title" in fields or "body" in fields) and not issue.is_bot:
             raise ValueError("Cannot update title or body of issue owned by another user")
 
-        raw_fields = self._mapper.get_raw_issue_fields(fields, issue=issue)
-        issue.raw_issue.update(notify=self._config.jira.notify_watchers, **raw_fields)
+        raw_fields, transition = self._mapper.get_raw_issue_fields(fields, issue=issue)
+        if len(raw_fields) > 0:
+            issue.raw_issue.update(notify=self._config.jira.notify_watchers, **raw_fields)
+        if transition is not None:
+            self._jira.transition_issue(issue.raw_issue, transition)
 
         raw_comments = self._jira.comments(issue.raw_issue)
         updated_issue = self._mapper.get_issue(issue.raw_issue, raw_comments)

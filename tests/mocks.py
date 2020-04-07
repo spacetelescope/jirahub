@@ -191,6 +191,10 @@ class MockJIRAIssue:
 
         self.fields.updated = _jira_now()
 
+    def _transition(self, status):
+        self.fields.status = MockJIRANamedObject(name=status)
+        self.fields.updated = _jira_now()
+
 
 class MockJIRA:
     ALL_PERMISSIONS = [
@@ -356,6 +360,9 @@ class MockJIRA:
             return next(u for u in self.users if u.key == username)
         except StopIteration:
             raise JIRAError()
+
+    def transition_issue(self, issue, status):
+        issue._transition(status)
 
 
 MockJIRA.reset()
