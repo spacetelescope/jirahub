@@ -58,7 +58,7 @@ class TestClient:
         assert isinstance(result, Generator)
         assert len(list(result)) == 0
 
-        mock_jira.create_issue(project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue")
+        mock_jira.create_issue(fields={"project": constants.TEST_JIRA_PROJECT_KEY, "summary": "Test issue"})
 
         result = list(client.find_issues())
         assert len(result) == 1
@@ -67,7 +67,9 @@ class TestClient:
         issue_ids = set()
         num_issues = client._PAGE_SIZE * 2 + 1
         for i in range(num_issues):
-            raw_issue = mock_jira.create_issue(project=constants.TEST_JIRA_PROJECT_KEY, summary=f"Test issue {i}")
+            raw_issue = mock_jira.create_issue(
+                fields={"project": constants.TEST_JIRA_PROJECT_KEY, "summary": f"Test issue {i}"}
+            )
             issue_ids.add(raw_issue.key)
 
         found_issue_ids = set()
@@ -86,7 +88,7 @@ class TestClient:
         assert isinstance(result, Generator)
         assert len(list(result)) == 0
 
-        mock_jira.create_issue(project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue")
+        mock_jira.create_issue(fields={"project": constants.TEST_JIRA_PROJECT_KEY, "summary": "Test issue"})
 
         result = list(client.find_issues(min_updated_at=now + timedelta(seconds=1)))
         assert len(result) == 0
@@ -100,23 +102,27 @@ class TestClient:
         assert client.find_other_issue(github_issue) is None
 
         raw_jira_issue = mock_jira.create_issue(
-            project=constants.TEST_JIRA_PROJECT_KEY,
-            summary="Test issue",
-            customfield_12345=f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}",
+            fields={
+                "project": constants.TEST_JIRA_PROJECT_KEY,
+                "summary": "Test issue",
+                "customfield_12345": f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}",
+            }
         )
         result = client.find_other_issue(github_issue)
         assert result.issue_id == raw_jira_issue.key
 
         mock_jira.create_issue(
-            project=constants.TEST_JIRA_PROJECT_KEY,
-            summary="Test issue",
-            customfield_12345=f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}",
+            fields={
+                "project": constants.TEST_JIRA_PROJECT_KEY,
+                "summary": "Test issue",
+                "customfield_12345": f"https://github.com/testing/test-repo/issues/{github_issue.issue_id}",
+            }
         )
         with pytest.raises(RuntimeError):
             client.find_other_issue(github_issue)
 
     def test_get_issue(self, client, mock_jira):
-        raw_issue = mock_jira.create_issue(project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue")
+        raw_issue = mock_jira.create_issue({"project": constants.TEST_JIRA_PROJECT_KEY, "summary": "Test issue"})
 
         result = client.get_issue(raw_issue.key)
 
@@ -124,7 +130,11 @@ class TestClient:
 
     def test_get_issue_bad_metadata(self, client, mock_jira):
         raw_issue = mock_jira.create_issue(
-            project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue", customfield_67890="definitely not JSON"
+            {
+                "project": constants.TEST_JIRA_PROJECT_KEY,
+                "summary": "Test issue",
+                "customfield_67890": "definitely not JSON",
+            }
         )
 
         result = client.get_issue(raw_issue.key)
@@ -213,7 +223,7 @@ class TestClient:
         assert raw_issue.fields.custom_field == "custom value"
 
     def test_update_issue(self, client, mock_jira):
-        raw_issue = mock_jira.create_issue(project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue")
+        raw_issue = mock_jira.create_issue({"project": constants.TEST_JIRA_PROJECT_KEY, "summary": "Test issue"})
 
         issue = client.get_issue(raw_issue.key)
 
@@ -270,14 +280,14 @@ class TestClient:
         assert issue.raw_issue.fields.status.name == config.jira.close_status
 
         raw_issue = mock_jira.create_issue(
-            project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue", status={"name": "Done"}
+            {"project": constants.TEST_JIRA_PROJECT_KEY, "summary": "Test issue", "status": {"name": "Done"}}
         )
         assert raw_issue.fields.status.name == "Done"
         issue = client.get_issue(raw_issue.key)
         assert issue.is_open is False
 
         raw_issue = mock_jira.create_issue(
-            project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue", status={"name": "Ready"}
+            {"project": constants.TEST_JIRA_PROJECT_KEY, "summary": "Test issue", "status": {"name": "Ready"}}
         )
         assert raw_issue.fields.status.name == "Ready"
         issue = client.get_issue(raw_issue.key)
@@ -403,14 +413,14 @@ class TestClient:
         assert issue.metadata.comments == []
 
     def test_non_mirror_issue(self, client, mock_jira):
-        raw_issue = mock_jira.create_issue(project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue")
+        raw_issue = mock_jira.create_issue(fields={"project": constants.TEST_JIRA_PROJECT_KEY, "summary": "Test issue"})
         raw_issue.fields.creator = mocks.MockJIRAUser("somestranger", "Some Stranger")
         issue = client.get_issue(raw_issue.key)
 
         assert issue.is_bot is False
 
     def test_issue_with_comments(self, client, mock_jira):
-        raw_issue = mock_jira.create_issue(project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue")
+        raw_issue = mock_jira.create_issue(fields={"project": constants.TEST_JIRA_PROJECT_KEY, "summary": "Test issue"})
         [mock_jira.add_comment(raw_issue.key, f"This is comment #{i+1}") for i in range(3)]
 
         issue = client.get_issue(raw_issue.key)
@@ -482,7 +492,7 @@ class TestClient:
             client.delete_comment(comment)
 
     def test_non_mirror_comment(self, client, mock_jira):
-        raw_issue = mock_jira.create_issue(project=constants.TEST_JIRA_PROJECT_KEY, summary="Test issue")
+        raw_issue = mock_jira.create_issue(fields={"project": constants.TEST_JIRA_PROJECT_KEY, "summary": "Test issue"})
         raw_comment = mock_jira.add_comment(issue=raw_issue.key, body="Test comment body")
         raw_comment.author = mocks.MockJIRAUser("somestranger", "Some Stranger")
 

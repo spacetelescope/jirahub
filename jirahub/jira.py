@@ -338,7 +338,8 @@ class Client:
 
     def create_issue(self, fields):
         raw_fields, _ = self._mapper.get_raw_issue_fields(fields)
-        raw_issue = self._jira.create_issue(**raw_fields, project=self._config.jira.project_key)
+        raw_fields["project"] = self._config.jira.project_key
+        raw_issue = self._jira.create_issue(fields=raw_fields)
         new_issue = self._mapper.get_issue(raw_issue, [])
 
         logger.info("Created issue %s", new_issue)
@@ -353,7 +354,7 @@ class Client:
 
         raw_fields, transition = self._mapper.get_raw_issue_fields(fields, issue=issue)
         if len(raw_fields) > 0:
-            issue.raw_issue.update(notify=self._config.jira.notify_watchers, **raw_fields)
+            issue.raw_issue.update(notify=self._config.jira.notify_watchers, fields=raw_fields)
         if transition is not None:
             self._jira.transition_issue(issue.raw_issue, transition)
 

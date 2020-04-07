@@ -78,25 +78,25 @@ def _jira_named_object(value):
         return MockJIRANamedObject(name=value["name"])
 
 
-def _jira_process_issue_fieldargs(fieldargs):
-    fieldargs = fieldargs.copy()
+def _jira_process_issue_fields(fields):
+    fields = fields.copy()
 
-    if "fixVersions" in fieldargs:
-        fieldargs["fixVersions"] = _jira_named_object_list(fieldargs["fixVersions"])
+    if "fixVersions" in fields:
+        fields["fixVersions"] = _jira_named_object_list(fields["fixVersions"])
 
-    if "components" in fieldargs:
-        fieldargs["components"] = _jira_named_object_list(fieldargs["components"])
+    if "components" in fields:
+        fields["components"] = _jira_named_object_list(fields["components"])
 
-    if "priority" in fieldargs:
-        fieldargs["priority"] = _jira_named_object(fieldargs["priority"])
+    if "priority" in fields:
+        fields["priority"] = _jira_named_object(fields["priority"])
 
-    if "issuetype" in fieldargs:
-        fieldargs["issuetype"] = _jira_named_object(fieldargs["issuetype"])
+    if "issuetype" in fields:
+        fields["issuetype"] = _jira_named_object(fields["issuetype"])
 
-    if "status" in fieldargs:
-        fieldargs["status"] = _jira_named_object(fieldargs["status"])
+    if "status" in fields:
+        fields["status"] = _jira_named_object(fields["status"])
 
-    return fieldargs
+    return fields
 
 
 def _bot_jira_user():
@@ -183,10 +183,10 @@ class MockJIRAIssue:
     fields: MockJIRAIssueFields
     key: str = field(default_factory=next_jira_issue_id)
 
-    def update(self, fields=None, update=None, async_=None, jira=None, notify=True, **fieldargs):
-        fieldargs = _jira_process_issue_fieldargs(fieldargs)
+    def update(self, fields=None, update=None, async_=None, jira=None, notify=True):
+        fields = _jira_process_issue_fields(fields)
 
-        for key, value in fieldargs.items():
+        for key, value in fields.items():
             setattr(self.fields, key, value)
 
         self.fields.updated = _jira_now()
@@ -341,11 +341,13 @@ class MockJIRA:
         except StopIteration:
             raise JIRAError()
 
-    def create_issue(self, project, **fieldargs):
+    def create_issue(self, fields):
+        fields = _jira_process_issue_fields(fields)
+
+        project = fields.pop("project")
         assert project in MockJIRA.valid_project_keys
 
-        fieldargs = _jira_process_issue_fieldargs(fieldargs)
-        fields = MockJIRAIssueFields(**fieldargs)
+        fields = MockJIRAIssueFields(**fields)
         issue = MockJIRAIssue(fields=fields)
         self.issues.append(issue)
         return issue
