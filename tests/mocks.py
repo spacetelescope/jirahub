@@ -100,7 +100,7 @@ def _jira_process_issue_fieldargs(fieldargs):
 
 
 def _bot_jira_user():
-    return MockJIRAUser(key=constants.TEST_JIRA_USERNAME, displayName=constants.TEST_JIRA_USER_DISPLAY_NAME)
+    return MockJIRAUser(name=constants.TEST_JIRA_USERNAME, displayName=constants.TEST_JIRA_USER_DISPLAY_NAME)
 
 
 class MockLogger:
@@ -121,7 +121,7 @@ class MockLogger:
 
 @dataclass
 class MockJIRAUser:
-    key: str
+    name: str
     displayName: str
 
 
@@ -357,7 +357,7 @@ class MockJIRA:
 
     def user(self, username):
         try:
-            return next(u for u in self.users if u.key == username)
+            return next(u for u in self.users if u.name == username)
         except StopIteration:
             raise JIRAError()
 

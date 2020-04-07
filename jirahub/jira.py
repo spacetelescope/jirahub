@@ -52,11 +52,11 @@ class _IssueMapper:
 
     def get_user(self, raw_user):
         if not raw_user.displayName:
-            display_name = raw_user.key
+            display_name = raw_user.name
         else:
             display_name = raw_user.displayName
 
-        return User(source=Source.JIRA, username=raw_user.key, display_name=display_name, raw_user=raw_user)
+        return User(source=Source.JIRA, username=raw_user.name, display_name=display_name, raw_user=raw_user)
 
     def get_comment(self, raw_comment):
         user = self.get_user(raw_comment.author)
