@@ -14,7 +14,7 @@ __all__ = ["IssueSync"]
 logger = logging.getLogger(__name__)
 
 
-_DEFAULT_ISSUE_TYPE = "Story"
+_DEFAULT_ISSUE_TYPE = "Task"
 
 
 class IssueSync:
