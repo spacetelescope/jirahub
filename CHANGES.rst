@@ -1,4 +1,9 @@
-0.2.0 (unreleased)
+0.2.1 (2020-06-25)
+------------------
+
+- Documentation fixes
+
+0.2.0 (2020-06-25)
 ------------------
 
 - Introduce configuration file
