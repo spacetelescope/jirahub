@@ -1,5 +1,5 @@
 Jirahub: a package for syncing JIRA tickets and GitHub issues
-----------------------------------------------------
+-------------------------------------------------------------
 
 This package provides a configurable tool for syncing tickets in a JIRA project and issues in a GitHub repository.
 
