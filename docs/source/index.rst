@@ -16,7 +16,7 @@ To download and install:
 
 .. code-block:: bash
 
-    $ pip install git+https://github.com/spacetelescope/jirahub.git@0.2.0
+    $ pip install jirahub
 
 The package's sole requirements are `PyGithub <https://github.com/PyGithub/PyGithub>`_ and
 `JIRA <https://github.com/pycontribs/jira>`_.  Both of these dependencies are installable via pip.
@@ -25,8 +25,9 @@ JIRA configuration
 ==================
 
 jirahub stores state on the JIRA issue in two custom fields, which you (or your JIRA administrator)
-will need to create.  By default, the field names are ``github_issue_url`` and ``jirahub_metadata``.
-``github_issue_url`` should be a "URL Field", and ``jirahub_metadata`` should be a "Text field (multi-line)".
+will need to create.  The first field stores the URL of a linked GitHub issue, and should be
+type "URL Field".  The second stores a JSON object containing general jirahub metadata, and should
+be type "Text field (multi-line)".
 
 jirahub configuration
 =====================
@@ -90,6 +91,8 @@ These are parameters particular to JIRA.  The ``server`` and ``project_key`` att
        default for new issues.
    * - c.jira.max_retries
      - Maximum number of retries on request failure
+   * - c.jira.notify_watchers
+     - Set to ``True`` if watchers should be notified when an issue is updated by the bot
    * - c.jira.sync_comments
      - Set to ``True`` if JIRA comments should be created from GitHub comments
    * - c.jira.sync_status
@@ -221,8 +224,8 @@ specify a configuration file.  Additional options include:
 * **--min-updated-at**: Restrict jirahub's activity to issues updated after this timestamp.  The timestamp
   format is ISO-8601 in UTC with no timezone suffix (e.g., 1983-11-20T11:00:00).
 
-* **--placeholder-path**: Path to a placeholder file containing the same timestamp described above.  The
-  file will be updated with a new timestamp after each run.
+* **--state-path**: Path to a JSON file containing the same timestamp described above, as well as
+  a list of issues that failed.  The file will be updated after each run.
 
 * **--dry-run**: Query issues and report changes to the (verbose) log, but do not change any data.
 
@@ -235,7 +238,7 @@ Users will likely want to run ``jirahub sync`` in a cron job, so that it can reg
 for changes.  We recommend use of the `lockrun <http://www.unixwiz.net/tools/lockrun.html>`_ tool to
 avoid overlap between jirahub processes.  Your cron line might look something like this::
 
-    */5 * * * * lockrun --lockfile=/path/to/jirahub.lockrun -- jirahub sync /path/to/my-jirahub-config.py --placeholder-path /path/to/jirahub-placeholder.txt >> /path/to/jirahub.log 2>&1
+    */5 * * * * lockrun --lockfile=/path/to/jirahub.lockrun -- jirahub sync /path/to/my-jirahub-config.py --state-path /path/to/jirahub-state.json >> /path/to/jirahub.log 2>&1
 
 Custom formatters
 =================
