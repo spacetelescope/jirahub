@@ -540,6 +540,10 @@ class TestFormatter:
                 "This is a link to a GitHub user profile: @username123",
             ),
             (
+                "This looks like a GitHub user mention but should be escaped: @username123",
+                "This looks like a GitHub user mention but should be escaped: @\u2063username123",
+            ),
+            (
                 "This is a body with *bold*, _italic_, and {{monospaced}} text.",
                 "This is a body with **bold**, *italic*, and `monospaced` text.",
             ),

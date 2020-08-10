@@ -331,6 +331,7 @@ class Formatter:
     URL_WITH_TEXT_RE = re.compile(r"\[(.*?)\|(http.*?)\]")
     URL_RE = re.compile(r"(\s|^)\[?(http.*?)\]?(\s|$)")
     USER_MENTION_RE = re.compile(r"\[~(.+?)\]")
+    GITHUB_USER_MENTION_RE = re.compile(r"(^|\s)@(\w+?)\b")
 
     def __init__(self, config, url_helper, jira_client):
         self._config = config
@@ -431,7 +432,17 @@ class Formatter:
 
         return self.format_link(url, link_text)
 
+    def _format_github_user_mention(self, match):
+        # Insert an invisible character between the @ and the username
+        # to prevent GitHub from mentioning a user.  U+2063 is the
+        # "invisible separator" code point.
+        return match.group(1) + "@\u2063" + match.group(2)
+
     def _format_content(self, content):
+        # Perform this transformation early since we don't want it to end up escaping
+        # intentional user mentions:
+        content = Formatter.GITHUB_USER_MENTION_RE.sub(self._format_github_user_mention, content)
+
         content = Formatter.HASH_NUMBER_RE.sub(lambda match: f"#&#x2060;{match.group(1)}", content)
         content = Formatter.H1_RE.sub("# ", content)
         content = Formatter.H2_RE.sub("## ", content)
