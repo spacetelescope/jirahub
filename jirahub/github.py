@@ -331,7 +331,7 @@ class Formatter:
     URL_WITH_TEXT_RE = re.compile(r"\[(.*?)\|(http.*?)\]")
     URL_RE = re.compile(r"(\s|^)\[?(http.*?)\]?(\s|$)")
     USER_MENTION_RE = re.compile(r"\[~(.+?)\]")
-    GITHUB_USER_MENTION_RE = re.compile(r"(^|\s)@(\w+?)\b")
+    GITHUB_USER_MENTION_RE = re.compile(r"(^|\s)@([0-9a-zA-Z-]+)\b")
 
     def __init__(self, config, url_helper, jira_client):
         self._config = config

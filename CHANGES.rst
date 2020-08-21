@@ -1,3 +1,8 @@
+0.2.3 (unreleased)
+------------------
+
+- Allow hyphens in GitHub usernames. [#27]
+
 0.2.2 (2020-08-10)
 ------------------
 
