@@ -568,6 +568,10 @@ class TestFormatter:
                 "This is a body with a GitHub mention: [Test User 123|https://github.com/username123]",
             ),
             (
+                "This is a body with a GitHub mention: @username-with-hyphens",
+                "This is a body with a GitHub mention: [Hyphen Aficionado|https://github.com/username-with-hyphens]",
+            ),
+            (
                 "This is a body with a GitHub mention that doesn't exist: @missing",
                 "This is a body with a GitHub mention that doesn't exist: @missing",
             ),
@@ -658,6 +662,7 @@ This is a single line quote
     )
     def test_format_body(self, formatter, body, expected, github_client, create_issue):
         github_client.users.append(User(Source.GITHUB, "username123", "Test User 123"))
+        github_client.users.append(User(Source.GITHUB, "username-with-hyphens", "Hyphen Aficionado"))
         github_client.issues.append(create_issue(Source.GITHUB, issue_id=2))
         github_client.pull_request_ids.append(4)
 

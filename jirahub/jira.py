@@ -432,7 +432,7 @@ class Formatter:
     NOFORMAT_OPEN_RE = re.compile(r"```(\w*)")
     NOFORMAT_CLOSE_RE = re.compile(r"```")
     HASH_NUMBER_RE = re.compile(r"(^|\s)#([0-9]+)($|\s)")
-    USER_MENTION_RE = re.compile(r"(^|\s)@(\w+?)\b")
+    USER_MENTION_RE = re.compile(r"(^|\s)@([0-9a-zA-Z-]+)\b")
     ITALIC_RE = re.compile(r"(^|[^\w*])\*(\w(.*?\w)?)\*($|[^\w*])")
     BOLD_RE = re.compile(r"(^|\W)\*\*(\w(.*?\w)?)\*\*($|\W)")
     MONOSPACED_RE = re.compile(r"`(.+?)`")
