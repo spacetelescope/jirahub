@@ -46,11 +46,6 @@ jobs:
             python-version: 3.8
             toxenv: flake8
 
-          - name: Flake8
-            runs-on: ubuntu-latest
-            python-version: 3.8
-            toxenv: flake8
-
           - name: Build documentation and check warnings
             runs-on: ubuntu-latest
             python-version: 3.8
