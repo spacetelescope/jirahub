@@ -366,6 +366,13 @@ class MockJIRA:
     def transition_issue(self, issue, status):
         issue._transition(status)
 
+    PROJECT_METADATA = object()
+
+    def createmeta(
+        self, projectKeys=None, projectIds=[], issuetypeIds=None, issuetypeNames=None, expand=None,
+    ):
+        return {"projects": [self.PROJECT_METADATA]}
+
 
 MockJIRA.reset()
 

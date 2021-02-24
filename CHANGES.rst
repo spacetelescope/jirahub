@@ -1,7 +1,9 @@
-0.2.3 (unreleased)
+0.3.0 (2021-02-24)
 ------------------
 
 - Allow hyphens in GitHub usernames. [#27]
+
+- Add hook to support modifying fields before update. [#29]
 
 0.2.2 (2020-08-10)
 ------------------

@@ -1,6 +1,7 @@
 import json
 import re
 from datetime import datetime, timezone
+from functools import lru_cache
 import logging
 import os
 import dataclasses
@@ -420,6 +421,10 @@ class Client:
 
     def _quote_query_string(self, value):
         return "'" + value.replace("'", "\\'") + "'"
+
+    @lru_cache()
+    def get_create_metadata(self, expand=None):
+        return self._jira.createmeta(self._config.jira.project_key, expand=expand)["projects"][0]
 
 
 class Formatter:
