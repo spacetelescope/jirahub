@@ -1,5 +1,6 @@
 import logging
 import dataclasses
+import inspect
 
 from .entities import Source, Metadata, CommentMetadata
 from .config import SyncFeature
@@ -118,6 +119,12 @@ class IssueSync:
         if other_issue:
             updated_issue_updates, other_issue_updates = self.make_issue_updates(updated_issue, other_issue)
 
+            for hook in self._config.before_issue_update:
+                args = [updated_issue, updated_issue_updates, other_issue, other_issue_updates]
+                if len(inspect.signature(hook).parameters) > 4:
+                    args.append(self)
+                updated_issue_updates, other_issue_updates = hook(*args)
+
             if updated_issue_updates:
                 logger.info("Updating %s: %s", updated_issue, updated_issue_updates)
                 if not self.dry_run:
@@ -141,7 +148,10 @@ class IssueSync:
             mirror_issue_fields = self.make_mirror_issue(updated_issue)
 
             for hook in self.get_source_config(other_source).before_issue_create:
-                mirror_issue_fields = hook(updated_issue, mirror_issue_fields)
+                args = [updated_issue, mirror_issue_fields]
+                if len(inspect.signature(hook).parameters) > 2:
+                    args.append(self)
+                mirror_issue_fields = hook(*args)
 
             logger.info("Creating mirror of %s: %s", updated_issue, mirror_issue_fields)
             if not self.dry_run:

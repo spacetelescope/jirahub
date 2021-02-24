@@ -121,7 +121,7 @@ These are parameters particular to JIRA.  The ``server`` and ``project_key`` att
    * - c.jira.before_issue_create
      - List of callables that transform the fields used to create a new JIRA issue.
        This can (for example) be used to override jirahub's behavior, or set values
-       for arbitrary custom fields.  See `Issue create hooks`_ for further detail.
+       for arbitrary custom fields.  See `Issue hooks`_ for further detail.
 
 github
 ``````
@@ -167,7 +167,23 @@ These are parameters particular to GitHub.  The ``repository`` parameter is requ
      - List of callables that transform the fields used to create a new GitHub issue.
        This can (for example) be used to override jirahub's behavior, or set values
        for fields (such as ``assignee``) that aren't otherwise managed by jirahub.
-       See `Issue create hooks`_ for further detail.
+       See `Issue hooks`_ for further detail.
+
+general
+```````
+These are parameters shared by GitHub and JIRA.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
+
+   * - Name
+     - Description
+   * - c.before_issue_update
+     - List of callables that transform the fields used to update an issue.
+       This can (for example) be used to override jirahub's behavior, or set values
+       for arbitrary custom fields.  See `Issue hooks`_ for further detail.
+
 
 
 Multiple configuration files
@@ -317,14 +333,24 @@ This feature can be used to sync issues based on "commands" issued by commenters
 
   c.jira.issue_filter = issue_filter
 
-Issue create hooks
-==================
+Issue hooks
+===========
 
-The ``before_issue_create`` hooks allow you to transform the fields sent to JIRA/GitHub when an issue
-is created.  They can override jirahub's behavior, or set custom fields that aren't otherwise managed
-by jirahub.  The hooks are callables that receive two arguments, the original ``jirahub.entities.Issue``,
-and a ``dict`` of fields that will be used to create the issue.  The callable must return a ``dict``
-containing the transformed fields.  For example, this hook sets a custom JIRA field:
+The ``before_issue_create`` and ``before_issue_update`` hooks allow you to transform the fields sent
+to JIRA/GitHub when an issue is created.  They can override jirahub's behavior, or set custom fields
+that aren't otherwise managed by jirahub.
+
+The create hooks are callables that receive 2 required arguments: the original ``jirahub.entities.Issue``,
+and a ``dict`` of fields that will be used to create the issue.  The 3rd optional argument, if present,
+will receive the the ``jirahub.IssueSync`` instance.  Each callable must return a ``dict`` containing
+the transformed fields.
+
+The update hooks are callables that receive 4 required arguments: the updated ``jirahub.entities.Issue``,
+a ``dict`` of fields that will be used to modify that issue, the corresponding linked ``jirahub.entities.Issue``,
+and another ``dict`` of fields.  The 5th optional argument, if present, will receive the ``jirahub.IssueSync``
+instance.  Each callable must return two ``dict`` instances containing the transformed fields.
+
+For example, this create hook sets a custom JIRA field:
 
 .. code-block:: python
 

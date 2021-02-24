@@ -526,6 +526,11 @@ class TestClient:
 
         assert comment.body == "Updated comment body"
 
+    def test_get_create_metadata(self, client):
+        # Not much of a test, just confirms that the method exists
+        # and passes on the result from the underlying client.
+        assert client.get_create_metadata() is mocks.MockJIRA.PROJECT_METADATA
+
 
 class TestFormatter:
     @pytest.fixture

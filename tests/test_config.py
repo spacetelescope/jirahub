@@ -14,6 +14,8 @@ CONFIG_PATH = Path(__file__).parent / "configs"
 def test_load_config_minimal():
     config = load_config(CONFIG_PATH / "minimal_config.py")
 
+    assert config.before_issue_update == []
+
     assert config.jira.server == "https://test.jira.server"
     assert config.jira.project_key == "TEST"
     assert config.jira.github_issue_url_field_id == 12345
@@ -53,6 +55,8 @@ def test_load_config_minimal():
 
 def test_load_config_full():
     config = load_config(CONFIG_PATH / "full_config.py")
+
+    assert callable(config.before_issue_update[0])
 
     assert config.jira.server == "https://test.jira.server"
     assert config.jira.project_key == "TEST"

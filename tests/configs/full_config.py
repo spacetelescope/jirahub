@@ -2,6 +2,13 @@
 
 import re
 
+
+def before_update_hook(updated_issue, updated_issue_fields, other_issue, other_issue_fields):
+    pass
+
+
+c.before_issue_update.append(before_update_hook)
+
 c.jira.server = "https://test.jira.server"
 c.jira.project_key = "TEST"
 c.jira.github_issue_url_field_id = 12345

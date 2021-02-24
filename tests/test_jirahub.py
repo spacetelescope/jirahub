@@ -678,6 +678,77 @@ class TestIssueSync:
         assert mirror_issue.labels == {"jirahub"}
 
     @pytest.mark.parametrize("source", list(Source))
+    def test_before_issue_create_additional_argument(self, issue_sync, config, source, create_issue):
+        enable_issue_filter(config, source.other)
+
+        argument = None
+
+        def hook(issue, fields, issue_sync):
+            nonlocal argument
+            argument = issue_sync
+            return fields
+
+        config.get_source_config(source.other).before_issue_create.append(hook)
+
+        source_issue = create_issue(source)
+        issue_sync.get_client(source).issues = [source_issue]
+
+        issue_sync.perform_sync()
+
+        assert argument is issue_sync
+
+    @pytest.mark.parametrize("source", list(Source))
+    def test_before_issue_update(self, issue_sync, config, source, create_issue):
+        enable_issue_filter(config, source.other)
+
+        def hook(updated_issue, updated_issue_fields, other_issue, other_issue_fields):
+            if "jirahub" not in updated_issue.labels:
+                updated_issue_fields["labels"] = updated_issue.labels | {"jirahub"}
+            if "jirahub" not in other_issue.labels:
+                other_issue_fields["labels"] = other_issue.labels | {"jirahub"}
+
+            return updated_issue_fields, other_issue_fields
+
+        config.before_issue_update.append(hook)
+
+        source_issue = create_issue(source)
+        issue_sync.get_client(source).issues = [source_issue]
+
+        issue_sync.perform_sync()
+
+        for source in Source:
+            assert "jirahub" not in issue_sync.get_client(source).issues[0].labels
+
+        issue_sync.perform_sync()
+
+        for source in Source:
+            assert "jirahub" in issue_sync.get_client(source).issues[0].labels
+
+    @pytest.mark.parametrize("source", list(Source))
+    def test_before_issue_update_additional_argument(self, issue_sync, config, source, create_issue):
+        enable_issue_filter(config, source.other)
+
+        argument = None
+
+        def hook(updated_issue, updated_issue_fields, other_issue, other_issue_fields, issue_sync):
+            nonlocal argument
+            argument = issue_sync
+            return updated_issue_fields, other_issue_fields
+
+        config.before_issue_update.append(hook)
+
+        source_issue = create_issue(source)
+        issue_sync.get_client(source).issues = [source_issue]
+
+        issue_sync.perform_sync()
+
+        assert argument is None
+
+        issue_sync.perform_sync()
+
+        assert argument is issue_sync
+
+    @pytest.mark.parametrize("source", list(Source))
     def test_issue_title_formatter(self, issue_sync, config, source, create_issue):
         enable_issue_filter(config, source.other)
 

@@ -2,7 +2,7 @@ import importlib.resources as importlib_resources
 import logging
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import List, Callable
+from typing import List, Callable, Tuple
 from pathlib import Path
 from collections.abc import Iterable
 import re
@@ -57,6 +57,7 @@ class JiraConfig:
     issue_body_formatter: Callable[[Issue, str], str] = None
     comment_body_formatter: Callable[[Issue, Comment, str], str] = None
     issue_filter: Callable[[Issue], bool] = None
+    # The callable may optionally receive the IssueSync instance as a third argument.
     before_issue_create: List[Callable[[Issue, dict], dict]] = field(default_factory=list)
 
 
@@ -74,6 +75,7 @@ class GithubConfig:
     issue_body_formatter: Callable[[Issue, str], str] = None
     comment_body_formatter: Callable[[Issue, Comment, str], str] = None
     issue_filter: Callable[[Issue], bool] = None
+    # The callable may optionally receive the IssueSync instance as a third argument.
     before_issue_create: List[Callable[[Issue, dict], dict]] = field(default_factory=list)
 
 
@@ -81,6 +83,8 @@ class GithubConfig:
 class JirahubConfig:
     jira: JiraConfig = field(default_factory=JiraConfig)
     github: GithubConfig = field(default_factory=GithubConfig)
+    # The callable may optionally receive the IssueSync instance as a fourth argument.
+    before_issue_update: List[Callable[[Issue, dict, Issue, dict], Tuple[dict, dict]]] = field(default_factory=list)
 
     def get_source_config(self, source):
         if source == Source.JIRA:
