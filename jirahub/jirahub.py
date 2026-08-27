@@ -6,7 +6,7 @@ from .entities import Source, Metadata, CommentMetadata
 from .config import SyncFeature
 from .utils import UrlHelper
 
-from . import jira, github
+from . import jira_management, github_management
 
 
 __all__ = ["IssueSync"]
@@ -21,8 +21,8 @@ _DEFAULT_ISSUE_TYPE = "Task"
 class IssueSync:
     @classmethod
     def from_config(cls, config, dry_run=False):
-        jira_client = jira.Client.from_config(config)
-        github_client = github.Client.from_config(config)
+        jira_client = jira_management.Client.from_config(config)
+        github_client = github_management.Client.from_config(config)
 
         return cls(config=config, jira_client=jira_client, github_client=github_client, dry_run=dry_run)
 
@@ -34,8 +34,8 @@ class IssueSync:
         self.url_helper = UrlHelper.from_config(config)
 
         self._formatter_by_source = {
-            Source.JIRA: jira.Formatter(config, self.url_helper, self.get_client(Source.GITHUB)),
-            Source.GITHUB: github.Formatter(config, self.url_helper, self.get_client(Source.JIRA)),
+            Source.JIRA: jira_management.Formatter(config, self.url_helper, self.get_client(Source.GITHUB)),
+            Source.GITHUB: github_management.Formatter(config, self.url_helper, self.get_client(Source.JIRA)),
         }
 
         self.dry_run = dry_run

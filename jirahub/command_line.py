@@ -16,11 +16,16 @@ logger = logging.getLogger(__name__)
 
 
 def _parse_args():
+    """
+    Parse the arguments passed through the command line
+    """
     parent_parser = ArgumentParser()
     parent_parser.add_argument("-v", "--verbose", action="store_true", help="enable verbose log messages")
 
+    # The parser we are returning
     parser = ArgumentParser(description="GitHub/JIRA issue sync tool", parents=[parent_parser], add_help=False)
 
+    # Add subparsers - sync_parser, placeholder_group, and permissions_parser, auth_parser
     subparsers = parser.add_subparsers(dest="command", help="selected command")
     subparsers.required = True
 
@@ -45,6 +50,15 @@ def _parse_args():
         add_help=False,
     )
     permissions_parser.add_argument("config_path", nargs="+", help="path to jirahub config file", metavar="config-path")
+
+    auth_parser = subparsers.add_parser("use_token", description="Use a token to access Jira", parents=[parent_parser])
+    auth_parser.add_argument(
+        "--use-token",
+        dest="use_token",
+        action="store_true",
+        help="Indicate if you want to use basic auth to connect to Jira. Default behavior uses username/password",
+    )
+    auth_parser.set_defaults(use_token=False)
 
     subparsers.add_parser(
         "generate-config", description="Print config file template to stdout", parents=[parent_parser], add_help=False

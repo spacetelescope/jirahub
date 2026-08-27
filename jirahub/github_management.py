@@ -34,7 +34,8 @@ class _IssueMapper:
         self._bot_username = bot_username
         self._raw_milestones_by_name = {m.title: m for m in raw_milestones}
 
-    def get_user(self, raw_user):
+    @staticmethod
+    def get_user(raw_user):
         if not raw_user.name:
             display_name = raw_user.login
         else:
@@ -65,7 +66,8 @@ class _IssueMapper:
             raw_comment=raw_comment,
         )
 
-    def get_raw_comment_fields(self, fields, comment=None):
+    @staticmethod
+    def get_raw_comment_fields(fields, comment=None):
         raw_fields = {}
 
         if "body" in fields:
@@ -274,7 +276,8 @@ class Client:
 
         logger.info("Updated %s", comment)
 
-    def delete_comment(self, comment):
+    @staticmethod
+    def delete_comment(comment):
         assert comment.source == Source.GITHUB
 
         if not comment.is_bot:
@@ -315,22 +318,22 @@ class Formatter:
     H4_RE = re.compile(r"\bh4\. ")
     H5_RE = re.compile(r"\bh5\. ")
     H6_RE = re.compile(r"\bh6\. ")
-    CODE_OPEN_RE = re.compile(r"\{code(:(.*?))?\}")
-    CODE_CLOSE_RE = re.compile(r"\{code\}")
-    NOFORMAT_RE = re.compile(r"\{noformat\}")
-    QUOTE_RE = re.compile(r"\{quote\}")
-    COLOR_RE = re.compile(r"\{color.*?\}")
+    CODE_OPEN_RE = re.compile(r"\{code(:(.*?))?}")
+    CODE_CLOSE_RE = re.compile(r"\{code}")
+    NOFORMAT_RE = re.compile(r"\{noformat}")
+    QUOTE_RE = re.compile(r"\{quote}")
+    COLOR_RE = re.compile(r"\{color.*?}")
     HASH_NUMBER_RE = re.compile(r"#([0-9]+)")
     BOLD_RE = re.compile(r"(^|\W)\*(\w(.*?\w)?)\*($|\W)")
     ITALIC_RE = re.compile(r"(^|\W)_(\w(.*?\w)?)_($|\W)")
-    MONOSPACED_RE = re.compile(r"\{\{(.*?)\}\}")
+    MONOSPACED_RE = re.compile(r"\{\{(.*?)}}")
     STRIKETHROUGH_RE = re.compile(r"(^|\W)-(\w(.*?\w)?)-($|\W)")
     INSERTED_RE = re.compile(r"(^|\W)\+(\w(.*?\w)?)\+($|\W)")
     SUPERSCRIPT_RE = re.compile(r"(^|\W)\^(\w(.*?\w)?)\^($|\W)")
     SUBSCRIPT_RE = re.compile(r"(^|\W)~(\w(.*?\w)?)~($|\W)")
-    URL_WITH_TEXT_RE = re.compile(r"\[(.*?)\|(http.*?)\]")
-    URL_RE = re.compile(r"(\s|^)\[?(http.*?)\]?(\s|$)")
-    USER_MENTION_RE = re.compile(r"\[~(.+?)\]")
+    URL_WITH_TEXT_RE = re.compile(r"\[(.*?)\|(http.*?)]")
+    URL_RE = re.compile(r"(\s|^)\[?(http.*?)]?(\s|$)")
+    USER_MENTION_RE = re.compile(r"[~(.+?)]")
     GITHUB_USER_MENTION_RE = re.compile(r"(^|\s)@([0-9a-zA-Z-]+)\b")
 
     def __init__(self, config, url_helper, jira_client):
@@ -386,24 +389,27 @@ class Formatter:
 
         return result
 
-    def _handle_noformat_content(self, content, open_match):
+    @staticmethod
+    def _handle_noformat_content(content, open_match):
         if len(content) > 0:
-            return (f"```{content}```", False)
+            return f"```{content}```", False
         else:
-            return ("", False)
+            return "", False
 
-    def _handle_code_content(self, content, open_match):
+    @staticmethod
+    def _handle_code_content(content, open_match):
         if open_match.group(2):
             language = open_match.group(2)
         else:
             language = ""
 
         if len(content) > 0:
-            return (f"```{language}{content}```", False)
+            return f"```{language}{content}```", False
         else:
-            return ("", False)
+            return "", False
 
-    def _handle_quoted_content(self, content, open_match):
+    @staticmethod
+    def _handle_quoted_content(content, open_match):
         if len(content) > 0:
             lines = content.split("\n")
             if not lines[0].strip():
@@ -411,9 +417,9 @@ class Formatter:
             if not lines[-1].strip():
                 lines = lines[:-1]
             content = "\n" + "\n".join("> " + l for l in lines) + "\n"
-            return (content, True)
+            return content, True
         else:
-            return ("", False)
+            return "", False
 
     def _format_user_mention(self, match):
         username = match.group(1)
@@ -432,7 +438,8 @@ class Formatter:
 
         return self.format_link(url, link_text)
 
-    def _format_github_user_mention(self, match):
+    @staticmethod
+    def _format_github_user_mention(match):
         # Insert an invisible character between the @ and the username
         # to prevent GitHub from mentioning a user.  U+2063 is the
         # "invisible separator" code point.

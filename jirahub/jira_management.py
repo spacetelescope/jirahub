@@ -13,7 +13,7 @@ from .entities import Issue, Comment, User, Source, Metadata, CommentMetadata
 from . import utils
 
 
-__all__ = ["Client", "Formatter", "get_username", "get_password"]
+__all__ = ["Client", "Formatter", "get_username", "get_password", "get_jira_token"]
 
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,10 @@ def get_username():
 
 def get_password():
     return os.environ.get("JIRAHUB_JIRA_PASSWORD")
+
+
+def get_jira_token():
+    return os.environ.get("JIRA_TOKEN")
 
 
 _JIRA_DATETIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%f%z"
@@ -52,7 +56,8 @@ class _IssueMapper:
         self._config = config
         self._bot_username = bot_username
 
-    def get_user(self, raw_user):
+    @staticmethod
+    def get_user(raw_user):
         if not raw_user.displayName:
             display_name = raw_user.name
         else:
@@ -84,7 +89,8 @@ class _IssueMapper:
             raw_comment=raw_comment,
         )
 
-    def get_raw_comment_fields(self, fields, comment=None):
+    @staticmethod
+    def get_raw_comment_fields(fields, comment=None):
         raw_fields = {}
 
         if "body" in fields:
@@ -220,7 +226,8 @@ class _IssueMapper:
         raw_fields.update(fields)
         return raw_fields, transition
 
-    def _make_name_list(self, values):
+    @staticmethod
+    def _make_name_list(values):
         return [{"name": v} for v in values]
 
     def _get_metadata(self, raw_issue):
@@ -276,18 +283,31 @@ class _IssueMapper:
 class Client:
     _PAGE_SIZE = 50
 
-    @classmethod
-    def from_config(cls, config):
-        jira = JIRA(
-            config.jira.server, basic_auth=(get_username(), get_password()), max_retries=config.jira.max_retries
-        )
-
-        return cls(config, jira, get_username())
-
     def __init__(self, config, jira, bot_username):
         self._config = config
         self._jira = jira
         self._mapper = _IssueMapper(config, bot_username)
+
+    @classmethod
+    def from_config(cls, config, use_token=False):
+        """
+        By default, we authenticate with username/password when connecting to Jira. If we want to use a token,
+            we need to pass in use_token as True
+
+        :param config: The config file used for the job
+        :param use_token: Indicates if we want to authenticate with the Jira token.
+        """
+        if use_token:
+            # the jira package used doesn't allow the token auth >3.1.0 has, so we add PAT auth after client creation
+            jira_client = JIRA(config.jira.server, max_retries=config.jira.max_retries, validate=False)
+            jira_client._session.headers.update({"Authorization": f'Bearer {config.jira.token}'})
+
+        else:
+            jira_client = JIRA(
+                config.jira.server, basic_auth=(get_username(), get_password()), max_retries=config.jira.max_retries
+            )
+
+        return cls(config, jira_client, get_username())
 
     def get_user(self, username):
         return self._mapper.get_user(self._jira.user(username))
@@ -392,7 +412,8 @@ class Client:
 
         return updated_comment
 
-    def delete_comment(self, comment):
+    @staticmethod
+    def delete_comment(comment):
         assert comment.source == Source.JIRA
 
         if not comment.is_bot:
@@ -419,7 +440,8 @@ class Client:
 
         return " and ".join(filters) + " order by updated asc"
 
-    def _quote_query_string(self, value):
+    @staticmethod
+    def _quote_query_string(value):
         return "'" + value.replace("'", "\\'") + "'"
 
     @lru_cache()
@@ -445,7 +467,7 @@ class Formatter:
     INSERTED_RE = re.compile(r"<ins>(.+?)</ins>")
     SUPERSCRIPT_RE = re.compile(r"<sup>(.+?)</sup>")
     SUBSCRIPT_RE = re.compile(r"<sub>(.+?)</sub>")
-    URL_WITH_TEXT_RE = re.compile(r"\[(.*?)\]\((http.*?)\)")
+    URL_WITH_TEXT_RE = re.compile(r"\[(.*?)]\((http.*?)\)")
     URL_RE = re.compile(r"(\s|^)<?(http.*?)>?(\s|$)")
     QUOTE_RE = re.compile(r"((^> .*?$)(\r?\n)?)+", re.MULTILINE)
 
@@ -475,11 +497,12 @@ class Formatter:
 
         return result
 
-    def _handle_noformat_content(self, content, open_match):
+    @staticmethod
+    def _handle_noformat_content(content, open_match):
         if open_match.group(1):
-            return ("{code:" + open_match.group(1) + "}" + content + "{code}", False)
+            return f"{{code:{open_match.group(1)}}}{content}{{code}}"
         else:
-            return ("{noformat}" + content + "{noformat}", False)
+            return f"{{noformat}}{content}{{noformat}}"
 
     def _format_user_mention(self, match):
         username = match.group(2)

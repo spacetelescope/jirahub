@@ -1,11 +1,11 @@
-from github import Github
-from github.GithubException import BadCredentialsException, UnknownObjectException
-from jira import JIRA
-from jira.exceptions import JIRAError
+from github_management import Github
+from github_management.GithubException import BadCredentialsException, UnknownObjectException
+from jira_management import JIRA
+from jira_management.exceptions import JIRAError
 import requests
 
 from .config import SyncFeature
-from . import jira, github
+from . import jira_management, github_management
 from .entities import Source
 
 
@@ -24,24 +24,39 @@ def check_permissions(config):
 def _check_jira_permissions(config):
     errors = []
 
-    username = jira.get_username()
+    username = jira_management.get_username()
     if not username:
         errors.append("Missing JIRA username.  Set the JIRAHUB_JIRA_USERNAME environment variable.")
 
-    password = jira.get_password()
+    password = jira_management.get_password()
     if not password:
         errors.append("Missing JIRA password.  Set the JIRAHUB_JIRA_PASSWORD environment variable.")
+
+    token = jira_management.get_jira_token()
+    if not token and not username and not password:
+        errors.append(
+            "Auth failed: JIRAHUB_JIRA_USERNAME, JIRAHUB_JIRA_PASSWORD, and JIRAHUB_JIRA_TOKEN are not set. "
+            "Either set the username and password or provide a PAT as environmental variables."
+        )
 
     if errors:
         return errors
 
     try:
-        client = JIRA(config.jira.server, basic_auth=(username, password), max_retries=0)
+        if username and password:
+            client = JIRA(config.jira.server, basic_auth=(username, password), max_retries=0)
+        if token:
+            # the jira package used doesn't allow the token auth >3.1.0 has, so we add PAT auth after client creation
+            client = JIRA(config.jira.server, max_retries=0, validate=False)
+            client._session.headers.update({"Authorization": f'Bearer {token}'})
+
     except requests.exceptions.ConnectionError:
         errors.append(f"Unable to communicate with JIRA server: {config.jira.server}")
         return errors
     except JIRAError:
-        errors.append("JIRA rejected credentials.  Check JIRAHUB_JIRA_USERNAME and JIRAHUB_JIRA_PASSWORD.")
+        errors.append(
+            "JIRA rejected credentials.  Check JIRAHUB_JIRA_USERNAME and JIRAHUB_JIRA_PASSWORD or JIRAHUB_JIRA_TOKEN."
+        )
         return errors
 
     try:
@@ -83,7 +98,7 @@ def _check_jira_permissions(config):
 def _check_github_permissions(config):
     errors = []
 
-    token = github.get_token()
+    token = github_management.get_token()
     if not token:
         errors.append("Missing GitHub access token.  Set the JIRAHUB_GITHUB_TOKEN environment variable.")
         return errors

@@ -3,7 +3,7 @@ import json
 from typing import Generator
 from datetime import datetime, timedelta, timezone
 
-from jirahub import jira
+from jirahub import jira_management
 from jirahub.entities import Source, User, Metadata, CommentMetadata
 from jirahub.utils import UrlHelper
 
@@ -11,11 +11,11 @@ from . import constants, mocks
 
 
 def test_get_username():
-    assert jira.get_username() == constants.TEST_JIRA_USERNAME
+    assert jira_management.get_username() == constants.TEST_JIRA_USERNAME
 
 
 def test_get_password():
-    assert jira.get_password() == constants.TEST_JIRA_PASSWORD
+    assert jira_management.get_password() == constants.TEST_JIRA_PASSWORD
 
 
 class TestClient:
@@ -27,16 +27,16 @@ class TestClient:
 
     @pytest.fixture
     def client(self, config, mock_jira):
-        return jira.Client(config=config, jira=mock_jira, bot_username=constants.TEST_JIRA_USERNAME)
+        return jira_management.Client(config=config, jira=mock_jira, bot_username=constants.TEST_JIRA_USERNAME)
 
     def test_from_config(self, config):
         # Just "asserting" that there are no exceptions here.
-        result = jira.Client.from_config(config)
-        assert isinstance(result, jira.Client)
+        result = jira_management.Client.from_config(config)
+        assert isinstance(result, jira_management.Client)
 
     def test_init(self, config, mock_jira):
         # Just "asserting" that there are no exceptions here.
-        jira.Client(config=config, jira=mock_jira, bot_username=constants.TEST_JIRA_USERNAME)
+        jira_management.Client(config=config, jira=mock_jira, bot_username=constants.TEST_JIRA_USERNAME)
 
     def test_get_user(self, client, mock_jira):
         mock_jira.users.append(mocks.MockJIRAUser("testusername123", "Test User 123"))
@@ -536,7 +536,7 @@ class TestFormatter:
     @pytest.fixture
     def formatter(self, config, github_client):
         url_helper = UrlHelper.from_config(config)
-        return jira.Formatter(config, url_helper, github_client)
+        return jira_management.Formatter(config, url_helper, github_client)
 
     @pytest.mark.parametrize(
         "url, link_text, expected",

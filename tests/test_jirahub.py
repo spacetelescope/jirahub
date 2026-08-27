@@ -5,7 +5,7 @@ import re
 from jirahub.jirahub import IssueSync
 from jirahub.entities import Source, Metadata, CommentMetadata
 from jirahub.config import SyncFeature
-from jirahub import github, jira
+from jirahub import github_management, jira_management
 
 from . import mocks, constants
 
@@ -105,8 +105,8 @@ class TestIssueSync:
         assert issue_sync.get_client(Source.GITHUB) == github_client
 
     def test_get_formatter(self, issue_sync):
-        assert isinstance(issue_sync.get_formatter(Source.JIRA), jira.Formatter)
-        assert isinstance(issue_sync.get_formatter(Source.GITHUB), github.Formatter)
+        assert isinstance(issue_sync.get_formatter(Source.JIRA), jira_management.Formatter)
+        assert isinstance(issue_sync.get_formatter(Source.GITHUB), github_management.Formatter)
 
     def test_get_project(self, config, issue_sync):
         assert issue_sync.get_project(Source.JIRA) == config.jira.project_key

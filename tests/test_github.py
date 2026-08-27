@@ -3,7 +3,7 @@ import pytest
 from typing import Generator
 from datetime import datetime, timedelta, timezone
 
-from jirahub import github
+from jirahub import github_management
 from jirahub.entities import Source, User, Metadata
 from jirahub.utils import UrlHelper
 
@@ -11,7 +11,7 @@ from . import constants, mocks
 
 
 def test_get_token():
-    assert github.get_token() == constants.TEST_GITHUB_TOKEN
+    assert github_management.get_token() == constants.TEST_GITHUB_TOKEN
 
 
 class TestClient:
@@ -25,25 +25,25 @@ class TestClient:
 
     @pytest.fixture
     def client(self, config, mock_github):
-        return github.Client(config, mock_github)
+        return github_management.Client(config, mock_github)
 
     def test_from_config(self, config):
         # Just "asserting" that there are no exceptions here.
-        client = github.Client.from_config(config)
-        assert isinstance(client, github.Client)
+        client = github_management.Client.from_config(config)
+        assert isinstance(client, github_management.Client)
 
     def test_init(self, config, mock_github):
         # Just "asserting" that there are no exceptions here.
-        github.Client(config, mock_github)
+        github_management.Client(config, mock_github)
 
     def test_init_bad_credentials(self, config):
         with pytest.raises(Exception):
-            github.Client(config, mocks.MockGithub(token="nope"))
+            github_management.Client(config, mocks.MockGithub(token="nope"))
 
     def test_init_missing_repo(self, config):
         config.github.repository = "testing/nope"
         with pytest.raises(Exception):
-            github.Client(config, mocks.MockGithub())
+            github_management.Client(config, mocks.MockGithub())
 
     def test_get_user(self, client, mock_github):
         mock_github.users.append(mocks.MockGithubUser("testusername123", "Test User 123"))
@@ -423,7 +423,7 @@ class TestFormatter:
     def formatter(self, config, jira_client):
         url_helper = UrlHelper.from_config(config)
 
-        return github.Formatter(config, url_helper, jira_client)
+        return github_management.Formatter(config, url_helper, jira_client)
 
     @pytest.mark.parametrize(
         "url, link_text, expected",

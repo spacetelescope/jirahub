@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 
 from jirahub.entities import User, Source, Comment, Issue, Metadata
 from jirahub.config import JiraConfig, GithubConfig, JirahubConfig
-import jirahub.jira
-import jirahub.github
+import jirahub.jira_management
+import jirahub.github_management
 import jirahub.permissions
 
 from . import constants
@@ -20,9 +20,9 @@ def setup_environment(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def mock_raw_clients(monkeypatch):
-    monkeypatch.setattr(jirahub.jira, "JIRA", mocks.MockJIRA)
+    monkeypatch.setattr(jirahub.jira_management, "JIRA", mocks.MockJIRA)
     monkeypatch.setattr(jirahub.permissions, "JIRA", mocks.MockJIRA)
-    monkeypatch.setattr(jirahub.github, "Github", mocks.MockGithub)
+    monkeypatch.setattr(jirahub.github_management, "Github", mocks.MockGithub)
     monkeypatch.setattr(jirahub.permissions, "Github", mocks.MockGithub)
 
 
